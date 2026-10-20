@@ -45,6 +45,12 @@
     drawing: false,
     motionScale: reduce.matches ? config.reducedMotionScale : 1,
     wave: null,
+    // Where the water was last touched (local or remote), normalized 0..1.
+    touch: null,
+  };
+
+  const remember = (nx, ny) => {
+    state.touch = { x: clamp(nx, 0, 1), y: clamp(ny, 0, 1), at: performance.now() };
   };
 
   const localListeners = new Set();
@@ -313,6 +319,7 @@
   };
 
   const addDrop = (nx, ny, multiplier = 1) => {
+    remember(nx, ny);
     deposit(nx, ny, config.tap * clamp(multiplier, 0, 1));
     depositInk(nx, ny, config.ink * 0.9 * clamp(multiplier, 0, 1), 1.5);
     encode();
@@ -322,6 +329,7 @@
     if (!current) {
       return;
     }
+    remember(x1, y1);
 
     const dx = (x1 - x0) * (waveWidth - 1);
     const dy = (y1 - y0) * (waveHeight - 1);

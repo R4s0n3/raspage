@@ -10,9 +10,9 @@ two people can share a room and draw into the same water. Each day it is
 reshaped by a short, diary-like prompt: a mood, a day, a thought. The animation
 changes; the diary stays private.
 
-**Current mood:** *Drawing Water* — the evening sky held in still, dark water;
-the gold light breaks into glints, and whatever you draw glows like ink and
-fades.
+**Current mood:** *Drawing Water* — the evening sky held in still, dark water,
+alive: soft drifters pulse through it, the water sparks where it is touched,
+and the drifters come to see who drew.
 
 ## Run it
 

@@ -54,6 +54,7 @@ window.MOODPAGE_SHADER = {
     uniform float u_water;
     uniform float u_glints;
     uniform float u_ink;
+    uniform float u_plankton;
 
     uniform float u_contrast;
     uniform float u_saturation;
@@ -196,11 +197,13 @@ window.MOODPAGE_SHADER = {
       // reflection and catches the light.
       vec2 wuv = vec2(uv.x, 1.0 - uv.y);
       vec2 waveGrad = vec2(0.0);
+      float waveHeight = 0.0;
       float waveLight = 0.0;
 
       if (u_waveWarp > 0.001 || u_waveGlow > 0.001) {
         vec4 surface = texture2D(u_wave, wuv);
         float wave = surface.r - 0.5;
+        waveHeight = wave;
         waveGrad = (surface.gb - 0.5) / 3.0;
         float slope = length(waveGrad);
 
@@ -378,6 +381,20 @@ window.MOODPAGE_SHADER = {
         vec3 inkColor = mix(u_light, u_glow, 0.3 + 0.5 * nearLight);
         float inkLight = inkHere * 0.6 + edge * 2.2 + inkAround * 0.22;
         col += inkColor * inkLight * (0.8 + 0.4 * crest) * u_ink;
+      }
+
+      // Something alive in the water: tiny sparks that breathe faintly and
+      // wake up wherever the surface is disturbed.
+      if (u_plankton > 0.001) {
+        float stir =
+          smoothstep(0.003, 0.045, length(waveGrad)) +
+          smoothstep(0.01, 0.1, abs(waveHeight)) * 0.6;
+        float sparks =
+          dust(p + wind * 0.5, 34.0, 0.006, 21.0, t) +
+          dust(p - wind * 0.3, 61.0, -0.004, 37.0, t) * 0.7;
+        float breathe = 0.5 + 0.5 * sin(t * 1.3 + p.x * 4.0 - p.y * 3.0);
+        vec3 living = mix(u_haze, u_light, 0.55 + 0.3 * stir);
+        col += living * sparks * u_plankton * (0.05 + 0.05 * breathe + stir * 1.3);
       }
 
       // Dust suspended in the air.

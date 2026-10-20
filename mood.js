@@ -9,7 +9,7 @@ window.MOOD = {
   title: "Drawing Water",
   date: "2026-10-20",
   description:
-    "Still, dark water holding the evening sky. The gold light breaks into glints on the surface, slow trails skate across it, and anything drawn into it spreads like ink and fades.",
+    "Still, dark water holding the evening sky. Soft living lights drift through it on a slow heartbeat, the water sparks wherever it is touched, and the drifters come, curious, to see who is there.",
 
   palette: {
     night: "#03070b", // the darkest water, the edges of the room
@@ -42,13 +42,29 @@ window.MOOD = {
     surface: 1.0, // 0 = open air, 1 = the sky is seen in dark water
     glints: 0.85, // the light's broken path on the surface
     inkGlow: 0.75, // how brightly drawn ink shows in the water
+    plankton: 0.8, // tiny living sparks that wake when the water is touched
+  },
+
+  life: {
+    creatures: 22, // soft drifters in the water (0 = none)
+    size: 1.45, // body scale
+    pulse: 0.32, // heartbeats per second; slow = calm, quick = restless
+    speed: 24, // px/s at the strongest push of a pulse
+    tendrils: 4, // trailing threads per drifter
+    tendrilLength: 150, // px of memory each one trails
+    sway: 1.0, // how much the tendrils undulate
+    wander: 0.55, // how freely they turn
+    gather: 0.25, // pull towards the light: lonely 0, together 1
+    curiosity: 0.7, // how readily they come to a touch
+    glow: 1.0, // their own light
+    excite: 1.0, // how brightly disturbed water lights them up
   },
 
   motes: {
-    streamers: 120,
-    strays: 12,
-    dust: 120,
-    bokeh: 12,
+    streamers: 0, // the light streams rest today; the water is alive instead
+    strays: 0,
+    dust: 90,
+    bokeh: 14,
     trailLength: 240,
     speed: 40,
     orbit: 9,

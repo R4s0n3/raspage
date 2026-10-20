@@ -41,6 +41,25 @@
     reducedMotionScale: settings.reducedMotionScale ?? 0.18,
   };
 
+  // Living matter: soft drifters that pulse through the water, trailing
+  // tendrils, lighting up when the water is touched. Off unless mood.life
+  // asks for them.
+  const lifeSettings = mood.life || {};
+  const life = {
+    creatures: lifeSettings.creatures ?? 0,
+    size: lifeSettings.size ?? 1,
+    pulse: lifeSettings.pulse ?? 0.4,
+    speed: lifeSettings.speed ?? 26,
+    tendrils: lifeSettings.tendrils ?? 4,
+    tendrilLength: lifeSettings.tendrilLength ?? 80,
+    sway: lifeSettings.sway ?? 1,
+    wander: lifeSettings.wander ?? 0.6,
+    gather: lifeSettings.gather ?? 0.2,
+    curiosity: lifeSettings.curiosity ?? 0.5,
+    glow: lifeSettings.glow ?? 1,
+    excite: lifeSettings.excite ?? 1,
+  };
+
   const palette = mood.palette;
   const rand = (min, max) => min + Math.random() * (max - min);
   const pick = (items) => items[Math.floor(Math.random() * items.length)];
@@ -77,7 +96,9 @@
   let streamers = [];
   let dust = [];
   let bokeh = [];
+  let creatures = [];
   let sprites = {};
+  let bells = {};
   let elapsed = 0;
   let last = performance.now();
   let active = true;
@@ -158,6 +179,72 @@
     }
   };
 
+  // A translucent bell, drawn once per colour: a soft dome with a brighter
+  // rim, a scalloped lower edge, and a small inner light. Top = forward.
+  const makeBells = () => {
+    bells = {};
+    const size = 128;
+    for (const [name, color] of Object.entries(colors)) {
+      const sprite = document.createElement("canvas");
+      sprite.width = size;
+      sprite.height = size;
+      const g = sprite.getContext("2d");
+      const c = (a) => `rgba(${color.r}, ${color.g}, ${color.b}, ${a})`;
+      const cx = size / 2;
+      const top = size * 0.2;
+      const rim = size * 0.62;
+      const half = size * 0.34;
+
+      const dome = () => {
+        g.beginPath();
+        g.moveTo(cx - half, rim);
+        g.bezierCurveTo(cx - half, top - 4, cx + half, top - 4, cx + half, rim);
+        // A scalloped skirt.
+        const lobes = 7;
+        for (let i = lobes - 1; i >= 0; i -= 1) {
+          const x0 = cx - half + ((i + 1) / lobes) * half * 2;
+          const x1 = cx - half + (i / lobes) * half * 2;
+          g.quadraticCurveTo((x0 + x1) / 2, rim + size * 0.045, x1, rim);
+        }
+        g.closePath();
+      };
+
+      const body = g.createRadialGradient(cx, top + 10, 2, cx, rim - 6, half * 1.25);
+      body.addColorStop(0, c(0.42));
+      body.addColorStop(0.55, c(0.16));
+      body.addColorStop(1, c(0.07));
+      dome();
+      g.fillStyle = body;
+      g.fill();
+
+      g.lineWidth = 1.6;
+      g.strokeStyle = c(0.42);
+      dome();
+      g.stroke();
+
+      // The inner light: four soft lobes around a bright centre.
+      for (let i = 0; i < 4; i += 1) {
+        const a = (i / 4) * Math.PI * 2 + Math.PI / 4;
+        const lx = cx + Math.cos(a) * half * 0.32;
+        const ly = (top + rim) / 2 + 4 + Math.sin(a) * half * 0.22;
+        const lobe = g.createRadialGradient(lx, ly, 0, lx, ly, half * 0.3);
+        lobe.addColorStop(0, c(0.5));
+        lobe.addColorStop(1, c(0));
+        g.fillStyle = lobe;
+        g.fillRect(0, 0, size, size);
+      }
+
+      const core = g.createRadialGradient(cx, top + 18, 0, cx, top + 18, half * 0.55);
+      core.addColorStop(0, `rgba(255, 255, 255, 0.35)`);
+      core.addColorStop(0.3, c(0.35));
+      core.addColorStop(1, c(0));
+      g.fillStyle = core;
+      g.fillRect(0, 0, size, size);
+
+      bells[name] = sprite;
+    }
+  };
+
   const areaScale = () =>
     Math.min(1, Math.max(0.4, (width * height) / 1100000));
 
@@ -229,6 +316,34 @@
     color: pick(["glow", "light", "haze"]),
   });
 
+  const spawnCreature = () => {
+    // depth 0 is close to the surface, 1 is deep and faint.
+    const depth = Math.pow(Math.random(), 1.4);
+    const scale = life.size * (1 - depth * 0.55) * rand(0.7, 1.35);
+    const tendrils = Math.max(
+      0,
+      Math.round(life.tendrils * rand(0.7, 1.3)),
+    );
+    return {
+      x: rand(0, width),
+      y: rand(0, height),
+      vx: 0,
+      vy: 0,
+      heading: rand(0, TAU),
+      phase: rand(0, TAU),
+      pulse: life.pulse * rand(0.75, 1.3),
+      size: 12 * scale,
+      depth,
+      alpha: (1 - depth * 0.65) * rand(0.6, 1),
+      tendrils,
+      trailLength: life.tendrilLength * scale * rand(0.8, 1.25),
+      color: pick(["light", "light", "haze", "glow"]),
+      seed: rand(0, 500),
+      excite: 0,
+      history: [],
+    };
+  };
+
   const fill = () => {
     const n = areaScale();
     const total = Math.round(config.streamers * n);
@@ -244,6 +359,10 @@
     bokeh = Array.from(
       { length: Math.round(config.bokeh * n) },
       () => spawnBokeh(),
+    );
+    creatures = Array.from(
+      { length: Math.round(life.creatures * Math.max(0.55, n)) },
+      () => spawnCreature(),
     );
   };
 
@@ -311,6 +430,36 @@
     }
   };
 
+  // The water surface under a point: slope and height, or null without water.
+  const sampleWater = (x, y) => {
+    const wave = interaction?.state?.wave;
+    if (!wave || wave.width < 3 || wave.height < 3) {
+      return null;
+    }
+    const cols = wave.width;
+    const rows = wave.height;
+    const gx = Math.min(
+      cols - 1,
+      Math.max(0, Math.round((x / Math.max(width, 1)) * (cols - 1))),
+    );
+    const gy = Math.min(
+      rows - 1,
+      Math.max(0, Math.round((y / Math.max(height, 1)) * (rows - 1))),
+    );
+    const index = (gy * cols + gx) * 4;
+    const field = wave.data;
+    const left = (gx > 0 ? field[index - 4] : field[index]) / 255 - 0.5;
+    const right = (gx < cols - 1 ? field[index + 4] : field[index]) / 255 - 0.5;
+    const up = (gy > 0 ? field[index - cols * 4] : field[index]) / 255 - 0.5;
+    const down =
+      (gy < rows - 1 ? field[index + cols * 4] : field[index]) / 255 - 0.5;
+    return {
+      slopeX: (right - left) * 0.5,
+      slopeY: (down - up) * 0.5,
+      height: field[index] / 255 - 0.5,
+    };
+  };
+
   const stepStreamer = (particle, dt, time, focus) => {
     const dx = particle.x - focus.x;
     const dy = particle.y - focus.y;
@@ -351,45 +500,14 @@
     // On a water day the streams lie down on the surface and glide.
     targetY *= 1 - config.flatten * 0.75;
 
-    if (interaction?.state?.wave) {
-      const wave = interaction.state.wave;
-      const cols = wave.width;
-      const rows = wave.height;
+    const water = sampleWater(particle.x, particle.y);
+    if (water) {
+      const push =
+        (interactionConfig.streamPush ?? 900) * interaction.state.motionScale;
 
-      if (cols > 2 && rows > 2) {
-        const gx = Math.min(
-          cols - 1,
-          Math.max(
-            0,
-            Math.round((particle.x / Math.max(width, 1)) * (cols - 1)),
-          ),
-        );
-        const gy = Math.min(
-          rows - 1,
-          Math.max(
-            0,
-            Math.round((particle.y / Math.max(height, 1)) * (rows - 1)),
-          ),
-        );
-        const index = (gy * cols + gx) * 4;
-        const field = wave.data;
-        const left = (gx > 0 ? field[index - 4] : field[index]) / 255 - 0.5;
-        const right =
-          (gx < cols - 1 ? field[index + 4] : field[index]) / 255 - 0.5;
-        const up =
-          (gy > 0 ? field[index - cols * 4] : field[index]) / 255 - 0.5;
-        const down =
-          (gy < rows - 1 ? field[index + cols * 4] : field[index]) / 255 - 0.5;
-        const slopeX = (right - left) * 0.5;
-        const slopeY = (down - up) * 0.5;
-        const push =
-          (interactionConfig.streamPush ?? 900) *
-          interaction.state.motionScale;
-
-        // A stream riding the slope of the water.
-        targetX += slopeX * push;
-        targetY += slopeY * push;
-      }
+      // A stream riding the slope of the water.
+      targetX += water.slopeX * push;
+      targetY += water.slopeY * push;
     }
 
     const inertia = Math.min(1, dt * 2.4);
@@ -495,6 +613,184 @@
     ctx.globalAlpha = 1;
   };
 
+  const turnTowards = (heading, target, amount) => {
+    let delta = target - heading;
+    delta = Math.atan2(Math.sin(delta), Math.cos(delta));
+    return heading + delta * Math.min(1, amount);
+  };
+
+  const stepCreature = (creature, dt, time, focus) => {
+    // A pulse: the bell contracts, pushes, then glides.
+    creature.phase += creature.pulse * TAU * dt;
+    const squeeze = Math.pow(Math.max(0, Math.sin(creature.phase)), 2);
+
+    // Wander along a slow noise field.
+    const n = noise(
+      creature.x * 0.0018 + creature.seed,
+      creature.y * 0.0018,
+      time * 1.6,
+    );
+    creature.heading += (n - 0.5) * 2.4 * life.wander * dt;
+
+    // Loosely drawn to the light, circling it rather than piling up.
+    if (life.gather > 0) {
+      const dx = focus.x - creature.x;
+      const dy = focus.y - creature.y;
+      const distance = Math.hypot(dx, dy) + 1;
+      const pull = Math.min(1, distance / (Math.min(width, height) * 0.6));
+      const target = Math.atan2(dy, dx) + (1 - pull) * 1.3;
+      creature.heading = turnTowards(
+        creature.heading,
+        target,
+        life.gather * pull * 0.35 * dt,
+      );
+    }
+
+    // Curious: drift towards where the water was last touched.
+    let interest = 0;
+    const touch = interaction?.state?.touch;
+    if (touch && life.curiosity > 0) {
+      const age = (performance.now() - touch.at) / 1000;
+      if (age < 9) {
+        const tx = touch.x * width - creature.x;
+        const ty = touch.y * height - creature.y;
+        const distance = Math.hypot(tx, ty);
+        const reach = Math.min(width, height) * 0.75;
+        if (distance < reach && distance > creature.size * 3) {
+          interest =
+            life.curiosity *
+            (1 - distance / reach) *
+            Math.min(1, age * 1.5) *
+            (1 - age / 9) *
+            (1 - creature.depth * 0.5);
+          creature.heading = turnTowards(
+            creature.heading,
+            Math.atan2(ty, tx),
+            interest * 3 * dt,
+          );
+        }
+      }
+    }
+
+    // A curious one swims harder, and its heart quickens a little.
+    creature.phase += interest * creature.pulse * TAU * dt * 0.8;
+    const thrust =
+      life.speed *
+      (0.18 + squeeze * 1.1) *
+      (1 - creature.depth * 0.45) *
+      (1 + interest * 2.2);
+    let targetX = Math.cos(creature.heading) * thrust + config.driftX * 0.25;
+    let targetY = Math.sin(creature.heading) * thrust + config.driftY * 0.25;
+
+    // Disturbed water carries them and wakes their light.
+    const water = sampleWater(creature.x, creature.y);
+    if (water) {
+      const push =
+        (interactionConfig.streamPush ?? 900) *
+        interaction.state.motionScale *
+        0.35;
+      targetX += water.slopeX * push;
+      targetY += water.slopeY * push;
+      const agitation =
+        Math.hypot(water.slopeX, water.slopeY) * 45 +
+        Math.abs(water.height) * 9;
+      creature.excite = Math.max(
+        creature.excite,
+        Math.min(1, agitation * life.excite),
+      );
+    }
+    creature.excite *= Math.exp(-dt / 1.8);
+
+    const ease = Math.min(1, dt * 1.4);
+    creature.vx += (targetX - creature.vx) * ease;
+    creature.vy += (targetY - creature.vy) * ease;
+    creature.x += creature.vx * dt;
+    creature.y += creature.vy * dt;
+    creature.squeeze = squeeze;
+    wrapStreamer(creature);
+    addHistory(creature);
+  };
+
+  const drawCreature = (creature, opacity) => {
+    const color = colors[creature.color] || colors.light;
+    const squeeze = creature.squeeze ?? 0;
+    const excite = creature.excite;
+    const size = creature.size;
+    const light =
+      creature.alpha *
+      opacity *
+      life.glow *
+      (0.55 + squeeze * 0.3 + excite * 1.4);
+
+    // Tendrils trail along the path the body took, swaying as they go.
+    const trail = creature.history;
+    if (creature.tendrils > 0 && trail.length > 4) {
+      const head = trail[0];
+      const tail = trail[trail.length - 1];
+      const fade = ctx.createLinearGradient(head.x, head.y, tail.x, tail.y);
+      fade.addColorStop(0, colorAt(color, Math.min(1, light * 0.8)));
+      fade.addColorStop(0.5, colorAt(color, Math.min(1, light * 0.32)));
+      fade.addColorStop(1, colorAt(color, 0));
+      ctx.strokeStyle = fade;
+      ctx.lineWidth = Math.max(0.6, size * 0.09);
+      const wave = elapsed * creature.pulse * TAU * 0.6;
+      const count = creature.tendrils;
+
+      for (let j = 0; j < count; j += 1) {
+        const spread = count > 1 ? (j / (count - 1) - 0.5) * size * 1.1 : 0;
+        ctx.beginPath();
+        for (let i = 0; i < trail.length; i += 2) {
+          const a = trail[Math.max(0, i - 1)];
+          const b = trail[Math.min(trail.length - 1, i + 1)];
+          let nx = -(b.y - a.y);
+          let ny = b.x - a.x;
+          const length = Math.hypot(nx, ny) || 1;
+          nx /= length;
+          ny /= length;
+          const s = i / (trail.length - 1);
+          const offset =
+            spread * (1 - s * 0.5) +
+            Math.sin(s * 9 - wave + j * 1.9 + creature.seed) *
+              size *
+              0.55 *
+              life.sway *
+              s;
+          const x = trail[i].x + nx * offset;
+          const y = trail[i].y + ny * offset;
+          if (i === 0) {
+            ctx.moveTo(x, y);
+          } else {
+            ctx.lineTo(x, y);
+          }
+        }
+        ctx.stroke();
+      }
+    }
+
+    // The halo of its own light.
+    const halo = size * (6 + excite * 5);
+    ctx.globalAlpha = Math.min(1, light * 0.5);
+    ctx.drawImage(
+      sprites[creature.color],
+      creature.x - halo / 2,
+      creature.y - halo / 2,
+      halo,
+      halo,
+    );
+
+    // The bell, facing where it swims, squeezing as it pulses.
+    const angle = Math.atan2(creature.vy, creature.vx) + Math.PI / 2;
+    const bell = size * 3.2;
+    ctx.save();
+    ctx.translate(creature.x, creature.y);
+    ctx.rotate(angle);
+    ctx.scale(1 - squeeze * 0.2, 1 + squeeze * 0.14);
+    ctx.globalAlpha = Math.min(1, light * 1.7);
+    ctx.drawImage(bells[creature.color], -bell / 2, -bell * 0.42, bell, bell);
+    ctx.restore();
+    ctx.globalAlpha = 1;
+  };
+
   const draw = (now) => {
     if (!active) {
       return;
@@ -575,6 +871,12 @@
       ctx.fill();
     }
 
+    // The living things.
+    for (const creature of creatures) {
+      stepCreature(creature, dt, time, focus);
+      drawCreature(creature, opacity);
+    }
+
     // The streams.
     for (const particle of streamers) {
       stepStreamer(particle, dt, time, focus);
@@ -593,6 +895,9 @@
       const time = (step * dt) * 0.035;
       for (const particle of streamers) {
         stepStreamer(particle, dt, time, focus);
+      }
+      for (const creature of creatures) {
+        stepCreature(creature, dt, time, focus);
       }
     }
     elapsed = steps * dt;
@@ -625,6 +930,7 @@
   });
 
   makeSprites();
+  makeBells();
   resize();
   warmup();
   window.addEventListener("resize", () => {

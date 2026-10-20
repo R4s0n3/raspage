@@ -177,7 +177,8 @@ the two-person rooms.
   wavelets shimmer the reflection, the bottom of the frame looks down into the
   water while the top turns to a mirror, the light breaks into a column of
   glints, and ink drawn by a touch glows in the surface.
-- **Pulse (`motes.js`)** — a transparent 2D canvas above the atmosphere. Light
+- **Pulse (`motes.js`)** — a transparent 2D canvas above the atmosphere. It
+  holds the `life` drifters when a mood asks for them. Light
   streams follow a slow noise field and curl around the focal point, leaving
   trails. A small number can be `strays`, which keep a slower outward path
   instead. Static dust and soft bokeh sit around them. Counts scale down on
@@ -252,10 +253,46 @@ block (or set the fields to `0`) for open air; every older mood looks as it did.
 | `surface` | `0–1` | wind wavelets on the reflection, and depth: the bottom of the frame looks into the water, the top is a mirror |
 | `glints` | `0–1` | the light's broken path: a narrow column of flickering points running down from the light |
 | `inkGlow` | `0–1.2` | how brightly ink drawn by a touch shows in the water (needs `interaction.ink`) |
+| `plankton` | `0–1` | tiny living sparks in the water: they breathe faintly and light up wherever the surface is disturbed |
 
 Water days read best with the light high (`lightY .25–.4`) so its glint path
 has room to run towards the viewer, and with `motes.flatten` so the streams
 lie down on the surface.
+
+### `life`
+
+Optional living matter in the 2D layer: soft, translucent drifters that swim
+on a heartbeat — the bell contracts, pushes, glides — trailing tendrils along
+the path they took. Disturbed water lights them up, and after a touch the
+nearby ones turn and come to look. Omit the block or set `creatures: 0` for
+none. This is the most personal instrument on the page: let it carry how the
+day *felt*, not what happened.
+
+| Field | Range (comfortable) | Effect |
+| --- | --- | --- |
+| `creatures` | `0–40` | how many drifters (scaled down on small screens) |
+| `size` | `0.6–2` | body scale |
+| `pulse` | `0.15–0.9` | heartbeats per second: slow = calm, quick = restless |
+| `speed` | `10–50` px/s | push at the strongest point of a beat |
+| `tendrils` | `0–7` | trailing threads per drifter |
+| `tendrilLength` | `40–220` px | how much path each one remembers |
+| `sway` | `0–2` | how much the tendrils undulate |
+| `wander` | `0–1.5` | how freely they turn |
+| `gather` | `0–1` | pull towards the light: `0` scattered and alone, `1` together around it |
+| `curiosity` | `0–1` | how readily they come to a touch |
+| `glow` | `0.4–1.5` | their own light |
+| `excite` | `0–2` | how brightly disturbed water lights them up |
+
+| The day feels… | Try |
+| --- | --- |
+| calm, held | `pulse .2–.3`, long tendrils, `wander .4`, `gather .3` |
+| lonely | few creatures, `gather 0`, `curiosity .9` — they still come when called |
+| warm, close | more creatures, `gather .6`, glow up |
+| anxious | `pulse .7+`, short tendrils, `wander 1.2`, `excite 1.6` |
+| tired, low | `pulse .15`, `speed 12`, `glow .6`, sparse |
+
+When `life` is on, set `motes.streamers` and `motes.strays` to `0`; the
+streaks read as shooting stars next to living things.
 
 ### `motes`
 

@@ -164,6 +164,7 @@
   set("u_water", water.surface ?? 0);
   set("u_glints", water.glints ?? 0);
   set("u_ink", interaction ? (water.inkGlow ?? 0) : 0);
+  set("u_plankton", water.plankton ?? 0);
 
   // The water surface from interaction.js: a small height field uploaded as
   // a texture every frame. The shader turns its slope into weather.
