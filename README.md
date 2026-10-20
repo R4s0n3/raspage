@@ -15,40 +15,50 @@ few trails drifting past.
 
 ## Run it
 
-No build step and no dependencies for the page itself.
+The page itself has no build step and no dependencies. Two ways:
 
 ```bash
+# page only, no rooms:
 python3 -m http.server 4173
 ```
 
-Open <http://localhost:4173>. Any static file server works. Opening `index.html`
-directly can work in some browsers, but a local server gives the most reliable
-WebGL/Canvas behaviour.
-
-### Two people in one room
-
-The two-person drawing is optional. The static page runs alone unless a room
-relay is available. To run the relay locally:
-
 ```bash
-cd server
+# the page plus the two-person rooms, on one local origin:
 npm install
 npm start
 ```
 
-It listens on <http://localhost:8787> (`/health` shows room counts). Open two
-tabs at <http://localhost:4173/?room=water>, draw in one, and the other sees the
-same water. The local page only reaches for the relay when a room is in the URL,
-so a plain local page stays quiet when the relay is not running. A `?ws=` query
-parameter (for example `?ws=ws://192.168.1.5:8787`) points the page at a relay on
-another host.
+The second command serves the site at <http://localhost:8787> together with the
+room relay. Opening `index.html` directly can work in some browsers, but a local
+server gives the most reliable WebGL/Canvas behaviour.
 
-For a deployed page, set the `moodpage-ws` meta tag in `index.html` to the
-public `wss://` URL of the relay. Visitors without a room are then paired into
-rooms of at most two, or they can share a specific room with `?room=yourname`.
-GitHub Pages cannot host WebSockets, so the relay needs its own small host (a
-VPS or a Node host). If the relay is not configured or not reachable, the page
-simply runs solo.
+### Two people in one room
+
+When the page is served by `npm start`, it connects to the relay on its own
+origin automatically. Open two tabs at <http://localhost:8787/?room=water>,
+draw in one, and the other sees the same water. Visitors without a room are
+paired into rooms of at most two; `?room=yourname` meets someone in a specific
+room. A `?ws=` query parameter (for example `?ws=ws://192.168.1.5:8787`) points
+the page at a relay on another host.
+
+The plain static page (GitHub Pages, `python3 -m http.server`) keeps the
+`moodpage-ws` meta tag empty and therefore runs solo: it never tries to connect
+and never logs connection errors. On the Node server, `server.js` fills that
+meta tag in at runtime with the page's own origin.
+
+### Deploying the relay
+
+The Node app is one process that serves the static site and the rooms on the
+same origin. On Coolify (nixpacks), point a service at this repository's root:
+
+- Build pack: Nixpacks (auto-detects the root `package.json`)
+- Ports exposes: `8787`
+- Health check: `GET /health`
+- Domains: the domain you serve the page from
+
+Coolify/Traefik terminates TLS; `server.js` reads `x-forwarded-proto` and serves
+the page with `wss://<same domain>` in its meta tag, so the published page talks
+to itself. The GitHub Pages mirror of the repository stays a silent, solo copy.
 
 ## The daily ritual
 
@@ -73,7 +83,8 @@ shader.js           WebGL atmosphere
 app.js              renderer, timing, water texture
 motes.js            2D layer of light streams and dust
 realtime.js         two-person room client
-server/             tiny WebSocket relay for the rooms
+server.js           Node app: static site + room relay on one origin
+package.json        the relay's only dependency (`ws`)
 journal/            dated, non-identifying mood logs
 AGENT.md            instructions for the next day
 ```
@@ -90,17 +101,21 @@ down for `prefers-reduced-motion`.
 The optional room relay forwards the same normalized drops and strokes to the
 other person in a room, so the water lands in the same relative place on a
 different screen. It stores nothing and keeps at most two clients per room.
+`server.js` serves the static site and the relay on the same origin and fills
+the `moodpage-ws` meta tag at runtime; on any other static host the meta stays
+empty and the page runs solo.
 
 ## Publishing
 
 The repository is a plain static site rooted at `main`, ready to serve from
 GitHub Pages if you enable it (Settings → Pages → Deploy from a branch → `main` /
-root). Every push to `main` will then update the page.
+root). Every push to `main` will then update that mirror. The GitHub Pages copy
+runs solo, because its `moodpage-ws` meta tag is empty.
 
-The room relay is separate from the static site. Deploy `server/` to a Node host
-and set the `moodpage-ws` meta tag in `index.html` to its public `wss://` URL;
-without that, the published page still works, just solo. GitHub Pages cannot run
-the relay itself.
+The room relay is part of the Node app in `server.js`. On Coolify, a nixpacks
+service on this repository's root serves the site and the rooms together (port
+`8787`, health check `GET /health`); `server.js` fills the meta tag with the
+page's own `wss://` origin, so no domain is hard-coded in the repository.
 
 After each daily change:
 

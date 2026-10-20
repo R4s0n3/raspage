@@ -1,0 +1,16 @@
+{
+  "name": "moodpage",
+  "version": "1.0.0",
+  "private": true,
+  "description": "moodpage: the static atmosphere and its two-person room relay",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "ws": "^8.18.0"
+  }
+}

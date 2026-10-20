@@ -1,15 +1,23 @@
 /*
- * moodpage rooms.
+ * moodpage server.
  *
- * A small WebSocket relay: up to two people per room. It knows nothing about
- * the drawing itself, it only forwards drops and strokes. Run it next to the
- * static page and point the moodpage-ws meta tag at it.
+ * One small Node process serves the static page and the two-person room relay
+ * on the same origin, so the published page can open a WebSocket back to
+ * itself. index.html is served with its moodpage-ws meta tag filled in at
+ * runtime; the repository copy keeps that meta empty, which keeps the plain
+ * static mirror (GitHub Pages, python -m http.server) silent and solo.
  *
- *   PORT=8787 node index.js
+ * Rooms hold at most two people. The relay stores nothing: it only forwards
+ * normalized drops and strokes to the other client in the room.
+ *
+ *   npm install
+ *   npm start            # PORT=8787 by default
  */
 "use strict";
 
+const fs = require("fs");
 const http = require("http");
+const path = require("path");
 const crypto = require("crypto");
 const { WebSocketServer, WebSocket } = require("ws");
 
@@ -17,6 +25,26 @@ const PORT = Number(process.env.PORT) || 8787;
 const MAX_PER_ROOM = 2;
 const MAX_ROOMS = 400;
 const MESSAGE_LIMIT = 120; // messages per second, per client
+
+const STATIC_ROOT = path.resolve(__dirname);
+const INDEX_META =
+  /(<meta\s+name="moodpage-ws"\s+content=")([^"]*)(")/i;
+
+const TYPES = {
+  ".html": "text/html; charset=utf-8",
+  ".css": "text/css; charset=utf-8",
+  ".js": "text/javascript; charset=utf-8",
+  ".json": "application/json; charset=utf-8",
+  ".md": "text/markdown; charset=utf-8",
+  ".txt": "text/plain; charset=utf-8",
+  ".svg": "image/svg+xml",
+  ".png": "image/png",
+  ".jpg": "image/jpeg",
+  ".jpeg": "image/jpeg",
+  ".gif": "image/gif",
+  ".ico": "image/x-icon",
+  ".webp": "image/webp",
+};
 
 const rooms = new Map(); // code -> { clients: Set<WebSocket> }
 
@@ -68,21 +96,102 @@ const number = (value, min, max) =>
 const validRoom = (value) =>
   typeof value === "string" && /^[a-z0-9_-]{1,16}$/i.test(value);
 
-const server = http.createServer((request, response) => {
+// The page served here is told to open its WebSocket on its own origin.
+const injectedMeta = (request) => {
+  const host = request.headers.host;
+  if (!host) {
+    return "";
+  }
+  const forwarded = (request.headers["x-forwarded-proto"] || "")
+    .split(",")[0]
+    .trim();
+  const proto = forwarded || "http";
+  const wsProto = proto === "https" ? "wss" : "ws";
+  return wsProto + "://" + host;
+};
+
+const serveFile = (filePath, request, response) => {
+  fs.readFile(filePath, (error, body) => {
+    if (error) {
+      response.writeHead(500, { "content-type": "text/plain" });
+      response.end("moodpage");
+      return;
+    }
+
+    const type = TYPES[path.extname(filePath).toLowerCase()] ||
+      "application/octet-stream";
+    let payload = body;
+
+    if (path.basename(filePath) === "index.html") {
+      const html = body.toString("utf8");
+      const match = html.match(INDEX_META);
+      // A non-empty meta in the repository wins; otherwise fill it in here.
+      if (match && match[2].trim() === "") {
+        payload = html.replace(INDEX_META, "$1" + injectedMeta(request) + "$3");
+      } else {
+        payload = body;
+      }
+    }
+
+    response.writeHead(200, {
+      "content-type": type,
+      "content-length": Buffer.byteLength(payload),
+    });
+    response.end(request.method === "HEAD" ? undefined : payload);
+  });
+};
+
+const serveStatic = (request, response) => {
   if (request.url === "/health") {
     let clients = 0;
     for (const room of rooms.values()) {
       clients += room.clients.size;
     }
-    response.writeHead(200, { "content-type": "application/json" });
-    response.end(JSON.stringify({ ok: true, rooms: rooms.size, clients }));
+    const body = JSON.stringify({ ok: true, rooms: rooms.size, clients });
+    response.writeHead(200, {
+      "content-type": "application/json; charset=utf-8",
+      "content-length": Buffer.byteLength(body),
+    });
+    response.end(request.method === "HEAD" ? undefined : body);
     return;
   }
 
-  response.writeHead(404, { "content-type": "text/plain" });
-  response.end("moodpage rooms");
-});
+  let pathname;
+  try {
+    pathname = decodeURIComponent(new URL(request.url, "http://moodpage").pathname);
+  } catch {
+    response.writeHead(400, { "content-type": "text/plain" });
+    response.end("moodpage");
+    return;
+  }
 
+  if (pathname === "/") {
+    pathname = "/index.html";
+  }
+
+  const filePath = path.normalize(path.join(STATIC_ROOT, pathname));
+  const insideRoot =
+    filePath === STATIC_ROOT || filePath.startsWith(STATIC_ROOT + path.sep);
+  const segments = filePath.split(path.sep);
+
+  // Never serve the diary's private drawer or the repository itself.
+  if (!insideRoot || segments.includes("private") || segments.includes(".git")) {
+    response.writeHead(404, { "content-type": "text/plain" });
+    response.end("moodpage");
+    return;
+  }
+
+  fs.stat(filePath, (error, stat) => {
+    if (error || !stat.isFile()) {
+      response.writeHead(404, { "content-type": "text/plain" });
+      response.end("moodpage");
+      return;
+    }
+    serveFile(filePath, request, response);
+  });
+};
+
+const server = http.createServer(serveStatic);
 const wss = new WebSocketServer({ server });
 
 wss.on("connection", (client) => {
@@ -251,5 +360,5 @@ wss.on("close", () => {
 });
 
 server.listen(PORT, () => {
-  console.log("moodpage rooms listening on " + PORT);
+  console.log("moodpage on http://localhost:" + PORT);
 });

@@ -29,9 +29,9 @@ Translate it into light, colour, weather, density, tempo, and movement.
   controls, persistent marks, cursor trails, or audio. Keep the amplitudes in
   `mood.js`.
 - **No build step and no framework.** The page is vanilla HTML, CSS, and JS: no
-  npm dependencies, external fonts, image libraries, or CDNs. The optional
-  two-person room relay in `server/` is a separate Node process and uses one
-  small dependency (`ws`); the page does not need it to run.
+  npm dependencies, external fonts, image libraries, or CDNs. The production
+  Node app in `server.js` serves the static page plus the two-person rooms and
+  uses one small dependency (`ws`); the page does not need it to run.
 - **Every visible colour comes from `mood.js`.** The CSS fallback keeps its own
   defaults, but the live page must not contain hard-coded scene colours.
 - **Respect reduced motion.** `prefers-reduced-motion` must noticeably slow the
@@ -154,8 +154,9 @@ interaction.js      water height field, pointer/touch, motion scaling
 shader.js           WebGL atmosphere: clouds, light, shader dust
 app.js              WebGL setup, water texture, motion/time
 motes.js            2D layer: long light streams, dust, bokeh
-realtime.js         two-person room client (optional, needs server/)
-server/             tiny WebSocket relay for the rooms (Node, optional)
+realtime.js         two-person room client (optional, needs server.js)
+server.js           Node app: static site + room relay on one origin
+package.json        the relay's only dependency (`ws`)
 favicon.svg         small static mark
 journal/            one atmospheric log per day
 AGENT.md            this file
@@ -164,8 +165,8 @@ README.md           human-facing overview and run instructions
 
 The page loads six classic scripts in this order: `mood.js`, `interaction.js`,
 `shader.js`, `app.js`, `motes.js`, then `realtime.js`. No bundler and no server
-code are required for the page itself; `realtime.js` and `server/` only power
-the optional two-person rooms.
+code are required for the page itself; `realtime.js` and `server.js` only power
+the two-person rooms.
 
 ### How the layers work
 
@@ -185,9 +186,9 @@ the optional two-person rooms.
   shader, and a slope force into the streams; both decay back into the mood.
   The field is also rendered to a small texture, which is its only pixel
   presence.
-- **Rooms (`realtime.js` + `server/`)** — an optional two-person relay for the
-  same water. It forwards normalized drops and strokes to the other client in
-  a room and stores nothing.
+- **Rooms (`realtime.js` + `server.js`)** — two-person rooms for the same
+  water. The client forwards normalized drops and strokes to the relay, which
+  echoes them to the other client in the room and stores nothing.
 
 The visual layers pause when the tab is hidden and resume without a time jump.
 The interaction module also stops accumulating while hidden.
@@ -357,30 +358,33 @@ page. Do not add a second interaction layer on top; extend the water fields in
 
 ### Two-person rooms
 
-`realtime.js` and `server/` add an optional, wordless room. Each room holds at
-most two people; connections without a room are paired with the first room that
-has space. Add `?room=CODE` to the URL to meet someone in a specific room
-(letters, digits, `_`, `-`; up to 16 characters). A third person asking for a
-full room is turned away and keeps running alone, silently retrying. The room is
-ephemeral: the server stores nothing and only forwards normalized drops and
-strokes to the other client.
+`realtime.js` and `server.js` add wordless rooms. Each room holds at most two
+people; connections without a room are paired with the first room that has
+space. Add `?room=CODE` to the URL to meet someone in a specific room (letters,
+digits, `_`, `-`; up to 16 characters). A third person asking for a full room is
+turned away and keeps running alone, silently retrying. The room is ephemeral:
+the server stores nothing and only forwards normalized drops and strokes to the
+other client.
 
-Run the relay locally:
+The Node app serves the page and the relay on the same origin:
 
 ```bash
-cd server
 npm install
 npm start
 ```
 
-The page served from `localhost` uses the relay when a room is in the URL
-(`?room=CODE`); a plain local page stays solo, so it never logs connection
-errors when the relay is not running. A `?ws=wss://...` query parameter
-overrides the meta for testing on another host. For a deployed page, set the
-`moodpage-ws` meta tag in `index.html` to the relay's public `wss://` URL.
-Visitors without a room are then paired into rooms of at most two. GitHub Pages
-is static and cannot host the relay; use a small VPS or a Node host. Without a
-configured URL the page runs solo, exactly as before.
+It serves the site at <http://localhost:8787> and fills the `moodpage-ws` meta
+tag in `index.html` with that origin at runtime, so the page connects back to
+itself. The repository copy of the meta stays empty: on any plain static host
+(GitHub Pages, `python3 -m http.server`) the page runs solo and never attempts a
+connection. Locally on a plain static server, `?room=CODE` still reaches for
+`ws://localhost:8787`, and `?ws=wss://...` points at a relay on another host.
+
+For production, point a Coolify (nixpacks) service at the repository root with
+port `8787` and health check `GET /health`. Traefik terminates TLS;
+`server.js` reads `x-forwarded-proto` and serves the page with `wss://<same
+domain>` in its meta, so no domain is hard-coded anywhere. The GitHub Pages
+mirror remains a silent, solo copy.
 
 The server rate-limits messages, caps the number of rooms, and expires empty
 rooms. Keep its protocol tiny: `drop` and `stroke` carry normalized `0..1`
@@ -536,10 +540,11 @@ the staying-in are in the enclosure; the "softening" is in the clearing light.
 - Default branch: `main`.
 - Remote: `origin` → `R4s0n3/raspage` on GitHub.
 - The site is static at the repository root; GitHub Pages can serve `main` /
-  `/` directly.
-- The room relay in `server/` is not part of the Pages build. Deploy it
-  separately and set the `moodpage-ws` meta tag to its `wss://` URL. If the
-  relay is offline, the page falls back to solo.
+  `/` directly as a solo mirror (the `moodpage-ws` meta tag is empty).
+- The room relay lives in `server.js`, served together with the page by a
+  Coolify (nixpacks) service on the repository root, port `8787`, health check
+  `GET /health`. It fills the meta tag with the page's own `wss://` origin at
+  runtime; no domain is hard-coded in the repo.
 - Commit once per day (or once per addendum), with the mood in the message.
 - Never force-push over another morning's entry. Pull first if the remote has
   changed.

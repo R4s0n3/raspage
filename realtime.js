@@ -3,9 +3,9 @@
  *
  * moodpage stays wordless: the room is the link you already have open. Up to
  * two people share a room, and every drop or stroke is relayed to the other
- * one through the small WebSocket server in server/. Set the moodpage-ws meta
- * tag to a wss:// URL to turn this on. Without it the page runs alone, exactly
- * as before.
+ * one through the small WebSocket relay in server.js. The relay fills the
+ * moodpage-ws meta tag with the page's own origin at runtime; without it the
+ * page runs alone, exactly as before.
  */
 (() => {
   "use strict";
