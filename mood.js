@@ -71,6 +71,19 @@ window.MOOD = {
     hideFor: 20, // seconds before a vanished drifter returns
   },
 
+  sound: {
+    volume: 0.5, // 0 = silent; fades in with the first touch
+    water: 0.55, // lapping at an unseen edge
+    lap: 0.2, // how restless the water is: long, tired pauses today
+    wind: 0.35, // air moving over the water
+    windTone: 320, // Hz; low and muffled: the close, thick air
+    drips: 3, // distant drips per minute
+    drop: 0.7, // the plop of a touch
+    pitch: 0.85, // a little lower and heavier than a clear day
+    stir: 0.5, // the hush of a hand moving through the water
+    space: 0.3, // how much room the sound has around it
+  },
+
   motes: {
     streamers: 0, // the light streams rest today; the water is alive instead
     strays: 0,

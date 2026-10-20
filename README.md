@@ -6,7 +6,9 @@ The page has no text, buttons, or content — only an infinite atmosphere of slo
 clouds and drifting streams of light. Draw into it: drag a finger or pointer and
 the surface leaves a soft wake of ripples that bends the clouds and nudges the
 light streams; tap to drop a stone and watch the rings spread and fade. Up to
-five people can share a room and draw into the same water. Each day it is
+five people can share a room and draw into the same water. The first touch
+also wakes a soft, synthesised sound of water and air: lapping, distant drips,
+a plop where you tap. Each day it is
 reshaped by a short, diary-like prompt: a mood, a day, a thought. The animation
 changes; the diary stays private.
 
@@ -84,6 +86,7 @@ shader.js           WebGL atmosphere
 app.js              renderer, timing, water texture
 motes.js            2D layer of light streams and dust
 realtime.js         shared room client
+sound.js            soft, synthesised water-and-air ambience
 server.js           Node app: static site + room relay on one origin
 package.json        the relay's only dependency (`ws`)
 journal/            dated, non-identifying mood logs

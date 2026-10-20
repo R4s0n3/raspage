@@ -26,8 +26,12 @@ Translate it into light, colour, weather, density, tempo, and movement.
 - **Interaction is weather, not UI.** Touching the page is touching water: a
   drag leaves a soft wake of ripples and a tap drops a stone. The water bends
   the clouds and nudges the streams, then fades back into the same world. No
-  controls, persistent marks, cursor trails, or audio. Keep the amplitudes in
+  controls, persistent marks, or cursor trails. Keep the amplitudes in
   `mood.js`.
+- **Sound is weather too.** The page may sound, but only as soft, natural
+  ambience synthesised in `sound.js` (water, air, drips) — no music, voices,
+  audio files, or a mute button. It is silent until the first touch (browsers
+  require a gesture), fades in gently, and goes quiet with a hidden tab.
 - **No build step and no framework.** The page is vanilla HTML, CSS, and JS: no
   npm dependencies, external fonts, image libraries, or CDNs. The production
   Node app in `server.js` serves the static page plus the shared rooms and
@@ -155,6 +159,7 @@ shader.js           WebGL atmosphere: clouds, light, shader dust
 app.js              WebGL setup, water texture, motion/time
 motes.js            2D layer: long light streams, dust, bokeh
 realtime.js         shared room client (optional, needs server.js)
+sound.js            synthesised ambience: water, air, drips, touch
 server.js           Node app: static site + room relay on one origin
 package.json        the relay's only dependency (`ws`)
 favicon.svg         small static mark
@@ -163,8 +168,8 @@ AGENT.md            this file
 README.md           human-facing overview and run instructions
 ```
 
-The page loads six classic scripts in this order: `mood.js`, `interaction.js`,
-`shader.js`, `app.js`, `motes.js`, then `realtime.js`. No bundler and no server
+The page loads seven classic scripts in this order: `mood.js`, `interaction.js`,
+`shader.js`, `app.js`, `motes.js`, `realtime.js`, then `sound.js`. No bundler and no server
 code are required for the page itself; `realtime.js` and `server.js` only power
 the shared rooms.
 
@@ -197,6 +202,12 @@ the shared rooms.
 - **Rooms (`realtime.js` + `server.js`)** — rooms of up to five people in the
   same water. The client forwards normalized drops and strokes to the relay,
   which echoes them to the others in the room and stores nothing.
+- **Sound (`sound.js`)** — Web Audio, built from looped pink and brown noise
+  and a few sine voices; no files. A bed of lapping water (low-passed noise
+  that swells and settles) and moving air (a wandering band of noise), rare
+  distant drips, a small rising "plop" for every drop and a hushed stir along
+  strokes, both heard from `onDisturb()` (so the room is heard too), panned
+  by position, through a soft synthetic room and a gentle limiter.
 
 The visual layers pause when the tab is hidden and resume without a time jump.
 The interaction module also stops accumulating while hidden.
@@ -300,6 +311,32 @@ day *felt*, not what happened.
 
 When `life` is on, set `motes.streamers` and `motes.strays` to `0`; the
 streaks read as shooting stars next to living things.
+
+### `sound`
+
+Optional. Omit the block or set `volume: 0` for silence; older moods stay
+silent. Sound starts with the first touch, fades in over a few seconds, and is
+suspended while the tab is hidden. Keep it quiet: it should be noticed late.
+
+| Field | Range (comfortable) | Effect |
+| --- | --- | --- |
+| `volume` | `0–0.8` | master level; `0` = silent |
+| `water` | `0–1` | lapping water at an unseen edge |
+| `lap` | `0–1` | how restless the water is: `0` long pauses between swells, `1` one after another |
+| `wind` | `0–1` | air moving over the water |
+| `windTone` | `200–1200` Hz | low = muffled, close air; high = thin, open, airy |
+| `drips` | `0–12` per minute | distant drips falling into the water |
+| `drop` | `0–1` | loudness of a touch's plop (and quieter bubbles along strokes) |
+| `pitch` | `0.6–1.5` | drop pitch: low = heavy, high = light and glassy |
+| `stir` | `0–1` | the hush of a hand moving through water |
+| `space` | `0–0.8` | how much room/reverb surrounds the sounds |
+
+| The day feels… | Try |
+| --- | --- |
+| calm, held | `water .5`, `lap .2`, `wind .2`, `drips 4`, `space .4` |
+| heavy, close | `windTone 300`, `lap .2`, `pitch .85`, `drips 2–3` |
+| open, bright | `windTone 800+`, `pitch 1.2`, `space .5` |
+| restless | `lap .8`, `wind .6`, `drips 10` |
 
 ### `motes`
 
@@ -501,6 +538,8 @@ large animated SVG filters. The current grain is a single static overlay.
       without triggering a browser gesture
 - [ ] Touch-and-drag works on a phone without scrolling the page
 - [ ] Interaction is reduced, not removed, under reduced motion
+- [ ] Silent before the first touch, soft after it, quiet when the tab is
+      hidden; no console errors with sound blocked or `volume: 0`
 - [ ] Pages in the same room see each other's ripples; up to five share a
       room, a sixth page for a full named room is refused, and pages without
       a room fill the fullest open room first (`GET /health` shows the count)
