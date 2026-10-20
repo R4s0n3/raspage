@@ -6,7 +6,7 @@ The page has no text, buttons, or content — only an infinite atmosphere of slo
 clouds and drifting streams of light. Draw into it: drag a finger or pointer and
 the surface leaves a soft wake of ripples that bends the clouds and nudges the
 light streams; tap to drop a stone and watch the rings spread and fade. Up to
-two people can share a room and draw into the same water. Each day it is
+five people can share a room and draw into the same water. Each day it is
 reshaped by a short, diary-like prompt: a mood, a day, a thought. The animation
 changes; the diary stays private.
 
@@ -24,7 +24,7 @@ python3 -m http.server 4173
 ```
 
 ```bash
-# the page plus the two-person rooms, on one local origin:
+# the page plus the shared rooms, on one local origin:
 npm install
 npm start
 ```
@@ -33,13 +33,13 @@ The second command serves the site at <http://localhost:8787> together with the
 room relay. Opening `index.html` directly can work in some browsers, but a local
 server gives the most reliable WebGL/Canvas behaviour.
 
-### Two people in one room
+### Sharing the water
 
 When the page is served by `npm start`, it connects to the relay on its own
 origin automatically. Open two tabs at <http://localhost:8787/?room=water>,
 draw in one, and the other sees the same water. Visitors without a room are
-paired into rooms of at most two; `?room=yourname` meets someone in a specific
-room. A `?ws=` query parameter (for example `?ws=ws://192.168.1.5:8787`) points
+placed together, filling rooms of up to five; `?room=yourname` meets specific
+people in a private room. A `?ws=` query parameter (for example `?ws=ws://192.168.1.5:8787`) points
 the page at a relay on another host.
 
 The plain static page (GitHub Pages, `python3 -m http.server`) keeps the
@@ -83,7 +83,7 @@ interaction.js      water height field, pointer and touch
 shader.js           WebGL atmosphere
 app.js              renderer, timing, water texture
 motes.js            2D layer of light streams and dust
-realtime.js         two-person room client
+realtime.js         shared room client
 server.js           Node app: static site + room relay on one origin
 package.json        the relay's only dependency (`ws`)
 journal/            dated, non-identifying mood logs
@@ -100,8 +100,8 @@ same slope. Everything is time-based, pauses when the tab is hidden, and slows
 down for `prefers-reduced-motion`.
 
 The optional room relay forwards the same normalized drops and strokes to the
-other person in a room, so the water lands in the same relative place on a
-different screen. It stores nothing and keeps at most two clients per room.
+others in a room, so the water lands in the same relative place on a
+different screen. It stores nothing and keeps at most five clients per room.
 `server.js` serves the static site and the relay on the same origin and fills
 the `moodpage-ws` meta tag at runtime; on any other static host the meta stays
 empty and the page runs solo.

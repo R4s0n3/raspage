@@ -49,8 +49,23 @@
     touch: null,
   };
 
-  const remember = (nx, ny) => {
-    state.touch = { x: clamp(nx, 0, 1), y: clamp(ny, 0, 1), at: performance.now() };
+  // Anything that wants to feel the water being touched, locally or by
+  // someone else in the room, gets each gesture as a normalized segment.
+  const disturbListeners = new Set();
+  const onDisturb = (listener) => {
+    disturbListeners.add(listener);
+    return () => disturbListeners.delete(listener);
+  };
+
+  const remember = (x0, y0, x1 = x0, y1 = y0) => {
+    state.touch = { x: clamp(x1, 0, 1), y: clamp(y1, 0, 1), at: performance.now() };
+    for (const listener of disturbListeners) {
+      try {
+        listener({ x0, y0, x1, y1 });
+      } catch {
+        // A broken listener must not stop the water.
+      }
+    }
   };
 
   const localListeners = new Set();
@@ -329,7 +344,7 @@
     if (!current) {
       return;
     }
-    remember(x1, y1);
+    remember(x0, y0, x1, y1);
 
     const dx = (x1 - x0) * (waveWidth - 1);
     const dy = (y1 - y0) * (waveHeight - 1);
@@ -518,6 +533,7 @@
     addDrop,
     addStroke,
     onLocalGesture,
+    onDisturb,
   };
 
   raf = window.requestAnimationFrame((now) => {

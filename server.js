@@ -1,14 +1,17 @@
 /*
  * moodpage server.
  *
- * One small Node process serves the static page and the two-person room relay
+ * One small Node process serves the static page and the shared room relay
  * on the same origin, so the published page can open a WebSocket back to
  * itself. index.html is served with its moodpage-ws meta tag filled in at
  * runtime; the repository copy keeps that meta empty, which keeps the plain
  * static mirror (GitHub Pages, python -m http.server) silent and solo.
  *
- * Rooms hold at most two people. The relay stores nothing: it only forwards
- * normalized drops and strokes to the other client in the room.
+ * Rooms hold up to five people. Visitors without a room code are placed in
+ * the fullest open room that still has space, so strangers share the same
+ * water; a named room (?room=CODE) only ever holds the people who asked for
+ * it. The relay stores nothing: it only forwards normalized drops and
+ * strokes to the others in the room.
  *
  *   npm install
  *   npm start            # PORT=8787 by default
@@ -22,7 +25,7 @@ const crypto = require("crypto");
 const { WebSocketServer, WebSocket } = require("ws");
 
 const PORT = Number(process.env.PORT) || 8787;
-const MAX_PER_ROOM = 2;
+const MAX_PER_ROOM = Math.max(2, Number(process.env.MAX_PER_ROOM) || 5);
 const MAX_ROOMS = 400;
 const MESSAGE_LIMIT = 120; // messages per second, per client
 
@@ -46,7 +49,9 @@ const TYPES = {
   ".webp": "image/webp",
 };
 
-const rooms = new Map(); // code -> { clients: Set<WebSocket> }
+// code -> { clients: Set<WebSocket>, open: boolean }
+// Open rooms are filled with whoever arrives; named rooms are not.
+const rooms = new Map();
 
 const roomCode = () => {
   for (let attempt = 0; attempt < 20; attempt += 1) {
@@ -60,17 +65,23 @@ const roomCode = () => {
 
 const openRoom = () => {
   const code = roomCode();
-  rooms.set(code, { clients: new Set() });
+  rooms.set(code, { clients: new Set(), open: true });
   return code;
 };
 
+// The fullest open room with space, so rooms fill up instead of leaving
+// everyone alone in a room of their own.
 const findRoom = () => {
+  let best = null;
+  let bestSize = 0;
   for (const [code, room] of rooms) {
-    if (room.clients.size < MAX_PER_ROOM) {
-      return code;
+    const size = room.clients.size;
+    if (room.open && size < MAX_PER_ROOM && size > bestSize) {
+      best = code;
+      bestSize = size;
     }
   }
-  return null;
+  return best;
 };
 
 const send = (client, message) => {
@@ -246,7 +257,7 @@ wss.on("connection", (client) => {
             client.close(4002, "busy");
             return;
           }
-          rooms.set(code, { clients: new Set() });
+          rooms.set(code, { clients: new Set(), open: false });
         }
       } else {
         code = findRoom();

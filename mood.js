@@ -9,7 +9,7 @@ window.MOOD = {
   title: "Drawing Water",
   date: "2026-10-20",
   description:
-    "Still, dark water holding the evening sky. Soft living lights drift through it on a slow heartbeat, the water sparks wherever it is touched, and the drifters come, curious, to see who is there.",
+    "Still, dark water holding the evening sky. A few soft living lights drift through it on a slow heartbeat; they come close out of curiosity, and vanish the moment they are touched.",
 
   palette: {
     night: "#03070b", // the darkest water, the edges of the room
@@ -46,8 +46,8 @@ window.MOOD = {
   },
 
   life: {
-    creatures: 22, // soft drifters in the water (0 = none)
-    size: 1.45, // body scale
+    creatures: 5, // soft drifters in the water (0 = none)
+    size: 1.7, // body scale
     pulse: 0.32, // heartbeats per second; slow = calm, quick = restless
     speed: 24, // px/s at the strongest push of a pulse
     tendrils: 4, // trailing threads per drifter
@@ -55,9 +55,11 @@ window.MOOD = {
     sway: 1.0, // how much the tendrils undulate
     wander: 0.55, // how freely they turn
     gather: 0.25, // pull towards the light: lonely 0, together 1
-    curiosity: 0.7, // how readily they come to a touch
+    curiosity: 0.55, // how readily they come to a touch
     glow: 1.0, // their own light
     excite: 1.0, // how brightly disturbed water lights them up
+    shy: 1.0, // touched or brushed past, they bolt and vanish (0 = fearless)
+    hideFor: 12, // seconds before a vanished drifter returns
   },
 
   motes: {

@@ -1,9 +1,10 @@
 /*
- * Two-person rooms.
+ * Shared rooms.
  *
  * moodpage stays wordless: the room is the link you already have open. Up to
- * two people share a room, and every drop or stroke is relayed to the other
- * one through the small WebSocket relay in server.js. The relay fills the
+ * five people share a room, and every drop or stroke is relayed to the others
+ * through the small WebSocket relay in server.js. Without a ?room= code the
+ * relay places a visitor with whoever else is there. The relay fills the
  * moodpage-ws meta tag with the page's own origin at runtime; without it the
  * page runs alone, exactly as before.
  */
@@ -104,7 +105,7 @@
         );
       }
     } else if (message.t === "full") {
-      // The room already has two people. Wait quietly and try again.
+      // The named room is full. Wait quietly and try again.
       retryAt = Date.now() + 15000;
     } else if (message.t === "busy") {
       retryAt = Date.now() + 30000;

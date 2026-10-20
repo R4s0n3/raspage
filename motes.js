@@ -58,6 +58,8 @@
     curiosity: lifeSettings.curiosity ?? 0.5,
     glow: lifeSettings.glow ?? 1,
     excite: lifeSettings.excite ?? 1,
+    shy: lifeSettings.shy ?? 0,
+    hideFor: lifeSettings.hideFor ?? 12,
   };
 
   const palette = mood.palette;
@@ -340,8 +342,73 @@
       color: pick(["light", "light", "haze", "glow"]),
       seed: rand(0, 500),
       excite: 0,
+      presence: 1,
+      fleeing: 0,
+      fleeX: 0,
+      fleeY: 0,
+      hiddenUntil: 0,
       history: [],
     };
+  };
+
+  // Touched or brushed past, a shy drifter flashes, bolts away from the
+  // hand, and fades out; some time later it drifts back in elsewhere.
+  const startle = (gesture) => {
+    if (life.shy <= 0 || creatures.length === 0) {
+      return;
+    }
+    const ax = gesture.x0 * width;
+    const ay = gesture.y0 * height;
+    const bx = gesture.x1 * width;
+    const by = gesture.y1 * height;
+    const abx = bx - ax;
+    const aby = by - ay;
+    const span = abx * abx + aby * aby;
+
+    for (const creature of creatures) {
+      if (creature.fleeing > 0 || creature.presence < 0.2) {
+        continue;
+      }
+      // Closest point on the gesture to this creature.
+      const t =
+        span > 0
+          ? Math.max(
+              0,
+              Math.min(
+                1,
+                ((creature.x - ax) * abx + (creature.y - ay) * aby) / span,
+              ),
+            )
+          : 0;
+      const dx = creature.x - (ax + abx * t);
+      const dy = creature.y - (ay + aby * t);
+      const distance = Math.hypot(dx, dy);
+      const reach = (creature.size * 3.5 + 60) * life.shy;
+      if (distance > reach) {
+        continue;
+      }
+
+      // Away from the hand, carried a little along a swipe.
+      const along = Math.sqrt(span) || 1;
+      let fx = dx / (distance || 1) + (abx / along) * 0.6;
+      let fy = dy / (distance || 1) + (aby / along) * 0.6;
+      if (distance < 1 && span === 0) {
+        const a = rand(0, TAU);
+        fx = Math.cos(a);
+        fy = Math.sin(a);
+      }
+      const length = Math.hypot(fx, fy) || 1;
+      creature.fleeX = fx / length;
+      creature.fleeY = fy / length;
+      creature.fleeing = 1;
+      creature.excite = 1;
+    }
+  };
+
+  const respawn = (creature) => {
+    const fresh = spawnCreature();
+    Object.assign(creature, fresh, { presence: 0, history: [] });
+    resetHistory(creature);
   };
 
   const fill = () => {
@@ -620,6 +687,38 @@
   };
 
   const stepCreature = (creature, dt, time, focus) => {
+    if (creature.hiddenUntil) {
+      if (performance.now() < creature.hiddenUntil) {
+        return;
+      }
+      respawn(creature);
+    }
+
+    if (creature.fleeing > 0) {
+      // A burst of panic: fast, straight, fading.
+      creature.fleeing = Math.max(0, creature.fleeing - dt / 0.85);
+      const burst = life.speed * 14 * (0.35 + creature.fleeing);
+      creature.heading = Math.atan2(creature.fleeY, creature.fleeX);
+      creature.phase += creature.pulse * TAU * dt * 5;
+      creature.squeeze = Math.pow(Math.max(0, Math.sin(creature.phase)), 2);
+      const ease = Math.min(1, dt * 9);
+      creature.vx += (creature.fleeX * burst - creature.vx) * ease;
+      creature.vy += (creature.fleeY * burst - creature.vy) * ease;
+      creature.x += creature.vx * dt;
+      creature.y += creature.vy * dt;
+      creature.presence = creature.fleeing;
+      addHistory(creature);
+      if (creature.fleeing <= 0) {
+        creature.hiddenUntil =
+          performance.now() + life.hideFor * 1000 * rand(0.7, 1.4);
+        creature.history = [];
+      }
+      return;
+    }
+
+    // Returning slowly after hiding.
+    creature.presence = Math.min(1, creature.presence + dt / 3);
+
     // A pulse: the bell contracts, pushes, then glides.
     creature.phase += creature.pulse * TAU * dt;
     const squeeze = Math.pow(Math.max(0, Math.sin(creature.phase)), 2);
@@ -712,6 +811,9 @@
   };
 
   const drawCreature = (creature, opacity) => {
+    if (creature.hiddenUntil || creature.presence <= 0.002) {
+      return;
+    }
     const color = colors[creature.color] || colors.light;
     const squeeze = creature.squeeze ?? 0;
     const excite = creature.excite;
@@ -720,6 +822,7 @@
       creature.alpha *
       opacity *
       life.glow *
+      creature.presence *
       (0.55 + squeeze * 0.3 + excite * 1.4);
 
     // Tendrils trail along the path the body took, swaying as they go.
@@ -931,6 +1034,7 @@
 
   makeSprites();
   makeBells();
+  interaction?.onDisturb?.(startle);
   resize();
   warmup();
   window.addEventListener("resize", () => {

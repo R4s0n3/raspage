@@ -30,7 +30,7 @@ Translate it into light, colour, weather, density, tempo, and movement.
   `mood.js`.
 - **No build step and no framework.** The page is vanilla HTML, CSS, and JS: no
   npm dependencies, external fonts, image libraries, or CDNs. The production
-  Node app in `server.js` serves the static page plus the two-person rooms and
+  Node app in `server.js` serves the static page plus the shared rooms and
   uses one small dependency (`ws`); the page does not need it to run.
 - **Every visible colour comes from `mood.js`.** The CSS fallback keeps its own
   defaults, but the live page must not contain hard-coded scene colours.
@@ -154,7 +154,7 @@ interaction.js      water height field, pointer/touch, motion scaling
 shader.js           WebGL atmosphere: clouds, light, shader dust
 app.js              WebGL setup, water texture, motion/time
 motes.js            2D layer: long light streams, dust, bokeh
-realtime.js         two-person room client (optional, needs server.js)
+realtime.js         shared room client (optional, needs server.js)
 server.js           Node app: static site + room relay on one origin
 package.json        the relay's only dependency (`ws`)
 favicon.svg         small static mark
@@ -166,7 +166,7 @@ README.md           human-facing overview and run instructions
 The page loads six classic scripts in this order: `mood.js`, `interaction.js`,
 `shader.js`, `app.js`, `motes.js`, then `realtime.js`. No bundler and no server
 code are required for the page itself; `realtime.js` and `server.js` only power
-the two-person rooms.
+the shared rooms.
 
 ### How the layers work
 
@@ -189,11 +189,14 @@ the two-person rooms.
   deposits a line of small drops and a tap deposits one larger drop; the
   surface spreads and fades. It feeds the cloud warp and crest light into the
   shader, and a slope force into the streams; both decay back into the mood.
-  The field is also rendered to a small texture, which is its only pixel
-  presence.
-- **Rooms (`realtime.js` + `server.js`)** — two-person rooms for the same
-  water. The client forwards normalized drops and strokes to the relay, which
-  echoes them to the other client in the room and stores nothing.
+  The field is also rendered to a small texture (R height, G/B slope, A ink),
+  which is its only pixel presence. When `interaction.ink` is set, strokes
+  also lay down ink that runs with the ripples, bleeds, and fades within
+  seconds. Every gesture, local or remote, is also announced through
+  `onDisturb()` so the `life` drifters can react to it.
+- **Rooms (`realtime.js` + `server.js`)** — rooms of up to five people in the
+  same water. The client forwards normalized drops and strokes to the relay,
+  which echoes them to the others in the room and stores nothing.
 
 The visual layers pause when the tab is hidden and resume without a time jump.
 The interaction module also stops accumulating while hidden.
@@ -270,7 +273,7 @@ day *felt*, not what happened.
 
 | Field | Range (comfortable) | Effect |
 | --- | --- | --- |
-| `creatures` | `0–40` | how many drifters (scaled down on small screens) |
+| `creatures` | `0–8` | how many drifters (scaled down on small screens); few is better — each one should feel like an encounter |
 | `size` | `0.6–2` | body scale |
 | `pulse` | `0.15–0.9` | heartbeats per second: slow = calm, quick = restless |
 | `speed` | `10–50` px/s | push at the strongest point of a beat |
@@ -282,12 +285,15 @@ day *felt*, not what happened.
 | `curiosity` | `0–1` | how readily they come to a touch |
 | `glow` | `0.4–1.5` | their own light |
 | `excite` | `0–2` | how brightly disturbed water lights them up |
+| `shy` | `0–1.5` | touched or brushed past, a drifter flashes, bolts away from the hand and vanishes; scales the startle distance; `0` = fearless |
+| `hideFor` | `4–40` s | roughly how long a vanished drifter stays away before fading back in elsewhere |
 
 | The day feels… | Try |
 | --- | --- |
 | calm, held | `pulse .2–.3`, long tendrils, `wander .4`, `gather .3` |
-| lonely | few creatures, `gather 0`, `curiosity .9` — they still come when called |
-| warm, close | more creatures, `gather .6`, glow up |
+| lonely | 1–2 creatures, `gather 0`, `curiosity .9` — they still come when called |
+| warm, close | 5–6 creatures, `gather .6`, glow up, `shy .5` |
+| guarded | `shy 1.4`, `hideFor 30`, `curiosity .2` |
 | anxious | `pulse .7+`, short tendrils, `wander 1.2`, `excite 1.6` |
 | tired, low | `pulse .15`, `speed 12`, `glow .6`, sparse |
 
@@ -419,15 +425,18 @@ streams). The canvas keeps `touch-action: none` so a drag never scrolls the
 page. Do not add a second interaction layer on top; extend the water fields in
 `mood.js` instead, with new config fields.
 
-### Two-person rooms
+### Shared rooms
 
-`realtime.js` and `server.js` add wordless rooms. Each room holds at most two
-people; connections without a room are paired with the first room that has
-space. Add `?room=CODE` to the URL to meet someone in a specific room (letters,
-digits, `_`, `-`; up to 16 characters). A third person asking for a full room is
-turned away and keeps running alone, silently retrying. The room is ephemeral:
-the server stores nothing and only forwards normalized drops and strokes to the
-other client.
+`realtime.js` and `server.js` add wordless rooms. Each room holds up to five
+people (`MAX_PER_ROOM` env var on the server, default `5`). Visitors without a
+room code are placed in the *fullest* open room that still has space, so
+strangers end up together instead of alone; when every open room is full a new
+one is started. Add `?room=CODE` to the URL to meet someone in a specific room
+(letters, digits, `_`, `-`; up to 16 characters). Named rooms are private to
+the link: strangers are never placed in them, and a sixth person asking for a
+full named room is turned away and keeps running alone, silently retrying. The
+room is ephemeral: the server stores nothing and only forwards normalized drops
+and strokes to the others.
 
 The Node app serves the page and the relay on the same origin:
 
@@ -489,8 +498,9 @@ large animated SVG filters. The current grain is a single static overlay.
       without triggering a browser gesture
 - [ ] Touch-and-drag works on a phone without scrolling the page
 - [ ] Interaction is reduced, not removed, under reduced motion
-- [ ] Two pages in the same room see each other's ripples; a third page is
-      refused; `GET /health` reports one room with two clients
+- [ ] Pages in the same room see each other's ripples; up to five share a
+      room, a sixth page for a full named room is refused, and pages without
+      a room fill the fullest open room first (`GET /health` shows the count)
 - [ ] With no relay configured, the page still loads and runs solo without
       console errors
 - [ ] Palette contrast is readable as an atmosphere, not mud; the light feels
