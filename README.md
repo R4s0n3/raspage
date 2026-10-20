@@ -5,7 +5,8 @@ A living background for the weather inside.
 The page has no text, buttons, or content — only an infinite atmosphere of slow
 clouds and drifting streams of light. Draw into it: drag a finger or pointer and
 the surface leaves a soft wake of ripples that bends the clouds and nudges the
-light streams; tap to drop a stone and watch the rings spread and fade. Up to
+light streams; tap to drop a stone and watch the rings spread and fade. Draw
+with two or three fingers and each one leaves its own line. Up to
 five people can share a room and draw into the same water. The first touch
 also wakes a soft, synthesised sound of water and air: lapping, distant drips,
 a plop where you tap. Each day it is

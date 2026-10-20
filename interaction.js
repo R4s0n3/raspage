@@ -130,12 +130,6 @@
   let tint = null;
   let data = null;
   let accumulator = 0;
-  let activePointer = null;
-  let lastX = 0;
-  let lastY = 0;
-  let lastSentX = 0;
-  let lastSentY = 0;
-  let lastSentAt = 0;
   let active = true;
   let last = performance.now();
   let raf = 0;
@@ -463,22 +457,43 @@
     y: clamp(event.clientY / Math.max(state.height, 1), 0, 1),
   });
 
+  // Every finger draws its own line. A gesture keeps where it last drew and
+  // where it was last sent to the room.
+  const MAX_POINTERS = 5;
+  const SEND_INTERVAL = 20; // ms per pointer; more fingers send less often
+  const pointers = new Map();
+
+  const sendStroke = (pointer, now) => {
+    emitLocal({
+      t: "stroke",
+      x0: pointer.sentX,
+      y0: pointer.sentY,
+      x1: pointer.x,
+      y1: pointer.y,
+      s: 1,
+    });
+    pointer.sentX = pointer.x;
+    pointer.sentY = pointer.y;
+    pointer.sentAt = now;
+  };
+
   const onPointerDown = (event) => {
-    if (activePointer !== null) {
+    if (pointers.has(event.pointerId) || pointers.size >= MAX_POINTERS) {
       return;
     }
     if (event.pointerType === "mouse" && event.button !== 0) {
       return;
     }
 
-    activePointer = event.pointerId;
-    state.drawing = true;
     const p = point(event);
-    lastX = p.x;
-    lastY = p.y;
-    lastSentX = p.x;
-    lastSentY = p.y;
-    lastSentAt = performance.now();
+    pointers.set(event.pointerId, {
+      x: p.x,
+      y: p.y,
+      sentX: p.x,
+      sentY: p.y,
+      sentAt: performance.now(),
+    });
+    state.drawing = true;
 
     addDrop(p.x, p.y, 1);
     emitLocal({ t: "drop", x: p.x, y: p.y, s: 1 });
@@ -491,53 +506,39 @@
   };
 
   const onPointerMove = (event) => {
-    if (!state.drawing || event.pointerId !== activePointer) {
+    const pointer = pointers.get(event.pointerId);
+    if (!pointer) {
       return;
     }
 
     const p = point(event);
-    if (Math.hypot(p.x - lastX, p.y - lastY) < 0.0005) {
+    if (Math.hypot(p.x - pointer.x, p.y - pointer.y) < 0.0005) {
       return;
     }
 
-    addStroke(lastX, lastY, p.x, p.y, 1);
-    lastX = p.x;
-    lastY = p.y;
+    addStroke(pointer.x, pointer.y, p.x, p.y, 1);
+    pointer.x = p.x;
+    pointer.y = p.y;
 
+    // Keep the whole hand within the relay's message budget.
     const now = performance.now();
-    if (now - lastSentAt > 20) {
-      emitLocal({
-        t: "stroke",
-        x0: lastSentX,
-        y0: lastSentY,
-        x1: p.x,
-        y1: p.y,
-        s: 1,
-      });
-      lastSentX = p.x;
-      lastSentY = p.y;
-      lastSentAt = now;
+    if (now - pointer.sentAt > SEND_INTERVAL * pointers.size) {
+      sendStroke(pointer, now);
     }
   };
 
   const finishPointer = (event, canceled) => {
-    if (event.pointerId !== activePointer) {
+    const pointer = pointers.get(event.pointerId);
+    if (!pointer) {
       return;
     }
 
-    if (!canceled && (lastSentX !== lastX || lastSentY !== lastY)) {
-      emitLocal({
-        t: "stroke",
-        x0: lastSentX,
-        y0: lastSentY,
-        x1: lastX,
-        y1: lastY,
-        s: 1,
-      });
+    if (!canceled && (pointer.sentX !== pointer.x || pointer.sentY !== pointer.y)) {
+      sendStroke(pointer, performance.now());
     }
 
-    state.drawing = false;
-    activePointer = null;
+    pointers.delete(event.pointerId);
+    state.drawing = pointers.size > 0;
 
     try {
       document.documentElement.releasePointerCapture(event.pointerId);
@@ -551,7 +552,7 @@
 
   const release = () => {
     state.drawing = false;
-    activePointer = null;
+    pointers.clear();
   };
 
   const onResize = () => {

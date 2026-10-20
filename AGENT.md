@@ -456,7 +456,10 @@ default to zero for old moods.
 
 `interaction.js` owns the water. Hover only supplies the small focal parallax. A
 pointer-down drops a stone; pointer-moves deposit a line of smaller drops along
-the path; a tap is a single stone. The height field is stepped at a fixed 60 Hz
+the path; a tap is a single stone. Every finger is its own pointer (up to five), so
+two or three fingers draw two or three lines at once; each keeps its own last
+point, and their relay messages are spaced out so a whole hand stays within the
+server's message limit. The height field is stepped at a fixed 60 Hz
 with an accumulator, encoded into a small RGBA texture each frame, and read by
 the shader (cloud warp and crest light) and by `motes.js` (slope push on the
 streams). The canvas keeps `touch-action: none` so a drag never scrolls the
