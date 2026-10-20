@@ -37,6 +37,7 @@
     driftY: settings.driftY ?? -2,
     fieldScale: settings.fieldScale ?? 1,
     opacity: settings.opacity ?? 1,
+    flatten: settings.flatten ?? 0,
     reducedMotionScale: settings.reducedMotionScale ?? 0.18,
   };
 
@@ -347,6 +348,9 @@
         (dx / distance) * orbit;
     }
 
+    // On a water day the streams lie down on the surface and glide.
+    targetY *= 1 - config.flatten * 0.75;
+
     if (interaction?.state?.wave) {
       const wave = interaction.state.wave;
       const cols = wave.width;
@@ -398,46 +402,82 @@
     addHistory(particle);
   };
 
-  const drawStreamer = (particle, opacity) => {
+  const colorAt = (color, alpha) =>
+    `rgba(${color.r}, ${color.g}, ${color.b}, ${alpha})`;
+
+  const traceTrail = (trail, count) => {
+    ctx.beginPath();
+    ctx.moveTo(trail[0].x, trail[0].y);
+    for (let i = 1; i < count - 1; i += 1) {
+      const mx = (trail[i].x + trail[i + 1].x) * 0.5;
+      const my = (trail[i].y + trail[i + 1].y) * 0.5;
+      ctx.quadraticCurveTo(trail[i].x, trail[i].y, mx, my);
+    }
+    const last = trail[count - 1];
+    ctx.lineTo(last.x, last.y);
+  };
+
+  const drawStreamer = (particle, opacity, focus) => {
     const trail = particle.history;
-    if (trail.length < 2) {
+    if (trail.length < 3) {
       return;
     }
 
-    const color = colors[particle.color] || colors.light;
+    let color = colors[particle.color] || colors.light;
+
+    // Streams that wander close to the light take on its warmth.
+    if (focus) {
+      const reach = Math.hypot(particle.x - focus.x, particle.y - focus.y);
+      const warmth = Math.max(
+        0,
+        1 - reach / (Math.min(width, height) * 0.5),
+      );
+      if (warmth > 0.001) {
+        const glow = colors.glow || color;
+        const mix = warmth * 0.65;
+        color = {
+          r: color.r + (glow.r - color.r) * mix,
+          g: color.g + (glow.g - color.g) * mix,
+          b: color.b + (glow.b - color.b) * mix,
+        };
+      }
+    }
     const twinkle =
       0.78 + 0.22 * Math.sin(elapsed * particle.twinkle * 2.4 + particle.phase);
     const shine = particle.alpha * opacity * twinkle;
+    const head = trail[0];
+    const tail = trail[trail.length - 1];
+
+    // A gradient along the trail: bright at the head, gone at the tail.
+    const fade = ctx.createLinearGradient(head.x, head.y, tail.x, tail.y);
+    fade.addColorStop(0, colorAt(color, shine * 0.26));
+    fade.addColorStop(0.3, colorAt(color, shine * 0.18));
+    fade.addColorStop(0.68, colorAt(color, shine * 0.11));
+    fade.addColorStop(1, colorAt(color, 0));
 
     // A wide, barely-there halo around the path.
-    ctx.beginPath();
-    ctx.moveTo(trail[0].x, trail[0].y);
-    for (let i = 1; i < trail.length; i += 1) {
-      ctx.lineTo(trail[i].x, trail[i].y);
-    }
-    ctx.strokeStyle = `rgba(${color.r}, ${color.g}, ${color.b}, ${shine * 0.07})`;
-    ctx.lineWidth = particle.size * 4.2;
+    traceTrail(trail, trail.length);
+    ctx.strokeStyle = fade;
+    ctx.globalAlpha = 0.55;
+    ctx.lineWidth = particle.size * 4.4;
     ctx.stroke();
 
-    // The full tail.
-    ctx.strokeStyle = `rgba(${color.r}, ${color.g}, ${color.b}, ${shine * 0.12})`;
-    ctx.lineWidth = particle.size;
+    // The full tail, thinning as it forgets.
+    ctx.globalAlpha = 1;
+    ctx.lineWidth = particle.size * 0.95;
     ctx.stroke();
 
-    // The living end of the stream.
-    const partial = Math.max(2, Math.round(trail.length * 0.34));
-    ctx.beginPath();
-    ctx.moveTo(trail[0].x, trail[0].y);
-    for (let i = 1; i < partial; i += 1) {
-      ctx.lineTo(trail[i].x, trail[i].y);
-    }
-    ctx.strokeStyle = `rgba(${color.r}, ${color.g}, ${color.b}, ${shine * 0.3})`;
-    ctx.lineWidth = particle.size * 1.1;
+    // The living end of the stream: short, brighter, slightly wider.
+    const partial = Math.max(3, Math.round(trail.length * 0.4));
+    traceTrail(trail, partial);
+    ctx.globalAlpha = 1;
+    ctx.strokeStyle = colorAt(color, shine * 0.55);
+    ctx.lineWidth = particle.size * 1.25;
     ctx.stroke();
 
-    // The particle itself.
-    const glowSize = particle.size * 16;
-    ctx.globalAlpha = shine * 0.75;
+    // The particle itself, as light rather than a dot.
+    const glowSize = particle.size * 20;
+    ctx.globalAlpha = shine * 0.8;
     ctx.drawImage(
       sprites[particle.color],
       particle.x - glowSize / 2,
@@ -446,11 +486,13 @@
       glowSize,
     );
 
-    ctx.globalAlpha = 1;
+    // A last small spark at the very head.
     ctx.beginPath();
-    ctx.arc(particle.x, particle.y, particle.size * 0.72, 0, TAU);
-    ctx.fillStyle = rgba(particle.color, shine * 0.9);
+    ctx.arc(particle.x, particle.y, Math.max(0.5, particle.size * 0.8), 0, TAU);
+    ctx.fillStyle = colorAt(color, shine);
     ctx.fill();
+
+    ctx.globalAlpha = 1;
   };
 
   const draw = (now) => {
@@ -536,7 +578,7 @@
     // The streams.
     for (const particle of streamers) {
       stepStreamer(particle, dt, time, focus);
-      drawStreamer(particle, opacity);
+      drawStreamer(particle, opacity, focus);
     }
 
     ctx.globalCompositeOperation = "source-over";

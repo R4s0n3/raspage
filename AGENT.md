@@ -173,6 +173,10 @@ the two-person rooms.
 - **Atmosphere (`shader.js`)** — a single full-screen WebGL triangle. Domain-
   warped fBm makes a slow cloudscape; five palette colours tint the air; a warm
   focal light opens a clearing in the weather; grain and vignette finish it.
+  With a `water` block the same sky is seen *in* dark water: perspective wind
+  wavelets shimmer the reflection, the bottom of the frame looks down into the
+  water while the top turns to a mirror, the light breaks into a column of
+  glints, and ink drawn by a touch glows in the surface.
 - **Pulse (`motes.js`)** — a transparent 2D canvas above the atmosphere. Light
   streams follow a slow noise field and curl around the focal point, leaving
   trails. A small number can be `strays`, which keep a slower outward path
@@ -238,6 +242,21 @@ The CSS veil (`styles.css`) supplies an additional constant vignette and a
 static paper grain over both canvases. Adjust it only when the whole visual
 language changes.
 
+### `water`
+
+Optional. Turns the sky into its reflection on a dark water surface. Omit the
+block (or set the fields to `0`) for open air; every older mood looks as it did.
+
+| Field | Range (comfortable) | Effect |
+| --- | --- | --- |
+| `surface` | `0–1` | wind wavelets on the reflection, and depth: the bottom of the frame looks into the water, the top is a mirror |
+| `glints` | `0–1` | the light's broken path: a narrow column of flickering points running down from the light |
+| `inkGlow` | `0–1.2` | how brightly ink drawn by a touch shows in the water (needs `interaction.ink`) |
+
+Water days read best with the light high (`lightY .25–.4`) so its glint path
+has room to run towards the viewer, and with `motes.flatten` so the streams
+lie down on the surface.
+
 ### `motes`
 
 The 2D layer is the pulse. This is where a day most clearly shows its tempo.
@@ -254,6 +273,7 @@ The 2D layer is the pulse. This is where a day most clearly shows its tempo.
 | `driftX`, `driftY` | `-25–25` px/s | shared wind direction |
 | `fieldScale` | `0.5–2` | higher = smaller, quicker swirls |
 | `opacity` | `0.3–1.2` | overall pulse strength |
+| `flatten` | `0–1` | damps vertical travel so streams glide flat across a water surface; `0` keeps free flight |
 | `reducedMotionScale` | `0.05–0.35` | optional per-mood override (default `.18`) |
 
 A calm day is usually `streamers 100–150`, `orbit 5–12`, `speed 30–50`.
@@ -281,10 +301,16 @@ stays on when the block is omitted, using gentle engine defaults.
 | `warp` | `0.5–2.5` | cloud displacement from the surface slope |
 | `glow` | `0.1–0.5` | light caught on the crests |
 | `reducedMotionScale` | `0.1–0.6` | scales the visual force and slows propagation |
+| `ink` | `0–1` | light laid into the water along a stroke and at a tap; `0` (default) draws nothing |
+| `inkRadius` | `1–3` cells | width of the drawn line |
+| `inkFade` | `0.994–0.999` | per-step fade at 60 Hz; `.998` lingers roughly eight seconds |
+| `inkSpread` | `0–0.15` | how fast the ink bleeds outward |
+| `inkFlow` | `0–5` | how strongly the ripples carry the ink downhill |
 
 A tap should read as a stone: a clear ring that spreads and fades over several
 seconds. A drag should leave a wake that follows the finger, then relax. The
-water is ephemeral: no persistent strokes, scores, or stored paths. Set `tap`,
+water is ephemeral: no persistent strokes, scores, or stored paths. Ink is
+the one visible trace of a gesture, and it must always fade on its own. Set `tap`,
 `drop`, `warp`, `glow`, and `streamPush` low to make a day still to the touch.
 
 ### `motion`

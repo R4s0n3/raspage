@@ -74,17 +74,17 @@ body {
   pointer-events: none;
   background:
     radial-gradient(
-      120% 96% at 50% 47%,
-      transparent 42%,
-      rgba(2, 4, 9, 0.3) 76%,
-      rgba(2, 4, 9, 0.62) 100%
+      118% 94% at 50% 47%,
+      transparent 40%,
+      color-mix(in srgb, var(--night) 42%, transparent) 75%,
+      color-mix(in srgb, var(--night) 78%, transparent) 100%
     ),
     linear-gradient(
       180deg,
-      rgba(2, 4, 9, 0.18) 0%,
-      transparent 18%,
-      transparent 80%,
-      rgba(2, 4, 9, 0.26) 100%
+      color-mix(in srgb, var(--deep) 55%, transparent) 0%,
+      transparent 17%,
+      transparent 78%,
+      color-mix(in srgb, var(--night) 55%, transparent) 100%
     );
 }
 

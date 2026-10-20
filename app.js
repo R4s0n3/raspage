@@ -158,6 +158,13 @@
   set("u_stars", mood.atmosphere.stars);
   set("u_rain", mood.atmosphere.rain);
 
+  // The surface the sky is seen in. All three stay off for moods without a
+  // water block.
+  const water = mood.water || {};
+  set("u_water", water.surface ?? 0);
+  set("u_glints", water.glints ?? 0);
+  set("u_ink", interaction ? (water.inkGlow ?? 0) : 0);
+
   // The water surface from interaction.js: a small height field uploaded as
   // a texture every frame. The shader turns its slope into weather.
   const waveTexture = gl.createTexture();

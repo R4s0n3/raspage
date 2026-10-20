@@ -27,7 +27,16 @@
     warp: settings.warp ?? 1.0,
     glow: settings.glow ?? 0.2,
     reducedMotionScale: settings.reducedMotionScale ?? 0.35,
+    ink: settings.ink ?? 0,
+    inkRadius: settings.inkRadius ?? (settings.radius ?? 2.8) * 0.6,
+    inkFade: settings.inkFade ?? 0.996,
+    inkSpread: settings.inkSpread ?? 0.08,
+    inkFlow: settings.inkFlow ?? 2.5,
   };
+
+  // The surface gradient is stored next to the height so the shader can
+  // interpolate smooth normals instead of differencing 8-bit heights.
+  const GRADIENT_SCALE = 3;
 
   const reduce = window.matchMedia("(prefers-reduced-motion: reduce)");
   const state = {
@@ -58,6 +67,9 @@
   let current = null;
   let previous = null;
   let next = null;
+  let ink = null;
+  let inkNext = null;
+  let inkLevel = 0;
   let data = null;
   let accumulator = 0;
   let activePointer = null;
@@ -87,25 +99,132 @@
     current = new Float32Array(size);
     previous = new Float32Array(size);
     next = new Float32Array(size);
+    ink = new Float32Array(size);
+    inkNext = new Float32Array(size);
+    inkLevel = 0;
     data = new Uint8Array(size * 4);
 
     for (let i = 0; i < size; i += 1) {
       data[i * 4] = 128;
-      data[i * 4 + 3] = 255;
+      data[i * 4 + 1] = 128;
+      data[i * 4 + 2] = 128;
+      data[i * 4 + 3] = 0;
     }
 
     state.wave = { width: cols, height: rows, data };
     accumulator = 0;
   };
 
+  // R: height, G/B: slope, A: ink. All centred on 0.5 except ink.
   const encode = () => {
     if (!data) {
       return;
     }
     const d = data;
-    for (let i = 0; i < current.length; i += 1) {
-      const value = clamp(0.5 + current[i], 0, 1);
-      d[i * 4] = Math.round(value * 255);
+    const cols = waveWidth;
+    const rows = waveHeight;
+    for (let y = 0; y < rows; y += 1) {
+      const row = y * cols;
+      const up = y > 0 ? row - cols : row;
+      const down = y < rows - 1 ? row + cols : row;
+      for (let x = 0; x < cols; x += 1) {
+        const i = row + x;
+        const left = x > 0 ? i - 1 : i;
+        const right = x < cols - 1 ? i + 1 : i;
+        const gx = (current[right] - current[left]) * 0.5;
+        const gy = (current[down + x] - current[up + x]) * 0.5;
+        const o = i * 4;
+        d[o] = Math.round(clamp(0.5 + current[i], 0, 1) * 255);
+        d[o + 1] = Math.round(clamp(0.5 + gx * GRADIENT_SCALE, 0, 1) * 255);
+        d[o + 2] = Math.round(clamp(0.5 + gy * GRADIENT_SCALE, 0, 1) * 255);
+        d[o + 3] = Math.round(clamp(ink[i], 0, 1) * 255);
+      }
+    }
+  };
+
+  // Ink drawn into the water: it runs down the slope of the ripples,
+  // spreads a little, and fades. Nothing stays.
+  const stepInk = () => {
+    if (inkLevel <= 0) {
+      return;
+    }
+
+    const cols = waveWidth;
+    const rows = waveHeight;
+    const fade = config.inkFade;
+    const spread = config.inkSpread;
+    const flow = config.inkFlow;
+    let level = 0;
+
+    for (let y = 1; y < rows - 1; y += 1) {
+      const row = y * cols;
+      for (let x = 1; x < cols - 1; x += 1) {
+        const i = row + x;
+        const gx = (current[i + 1] - current[i - 1]) * 0.5;
+        const gy = (current[i + cols] - current[i - cols]) * 0.5;
+
+        // Trace back against the flow and read what was there.
+        const sx = clamp(x + gx * flow, 0, cols - 1.001);
+        const sy = clamp(y + gy * flow, 0, rows - 1.001);
+        const ix = Math.floor(sx);
+        const iy = Math.floor(sy);
+        const fx = sx - ix;
+        const fy = sy - iy;
+        const j = iy * cols + ix;
+        const top = ink[j] + (ink[j + 1] - ink[j]) * fx;
+        const bottom = ink[j + cols] + (ink[j + cols + 1] - ink[j + cols]) * fx;
+        const carried = top + (bottom - top) * fy;
+
+        const around =
+          (ink[i - 1] + ink[i + 1] + ink[i - cols] + ink[i + cols]) * 0.25;
+        const value = Math.max(
+          0,
+          (carried + (around - carried) * spread) * fade - 0.0003,
+        );
+        inkNext[i] = value;
+        if (value > level) {
+          level = value;
+        }
+      }
+    }
+
+    const swap = ink;
+    ink = inkNext;
+    inkNext = swap;
+    inkLevel = level;
+  };
+
+  const depositInk = (nx, ny, amount, radiusScale = 1) => {
+    if (!ink || amount <= 0) {
+      return;
+    }
+
+    const cx = clamp(nx, 0, 1) * (waveWidth - 1);
+    const cy = clamp(ny, 0, 1) * (waveHeight - 1);
+    const radius = Math.max(0.6, config.inkRadius * radiusScale);
+    const reach = Math.ceil(radius * 2);
+    const sigma = radius * radius;
+
+    for (let y = Math.round(cy) - reach; y <= Math.round(cy) + reach; y += 1) {
+      if (y < 1 || y >= waveHeight - 1) {
+        continue;
+      }
+      for (let x = Math.round(cx) - reach; x <= Math.round(cx) + reach; x += 1) {
+        if (x < 1 || x >= waveWidth - 1) {
+          continue;
+        }
+        const dx = x - cx;
+        const dy = y - cy;
+        const distance = (dx * dx + dy * dy) / sigma;
+        if (distance > 4) {
+          continue;
+        }
+        const i = y * waveWidth + x;
+        ink[i] = Math.min(1, ink[i] + amount * Math.exp(-distance * 1.6));
+        if (ink[i] > inkLevel) {
+          inkLevel = ink[i];
+        }
+      }
     }
   };
 
@@ -195,6 +314,7 @@
 
   const addDrop = (nx, ny, multiplier = 1) => {
     deposit(nx, ny, config.tap * clamp(multiplier, 0, 1));
+    depositInk(nx, ny, config.ink * 0.9 * clamp(multiplier, 0, 1), 1.5);
     encode();
   };
 
@@ -211,7 +331,10 @@
 
     for (let i = 1; i <= steps; i += 1) {
       const t = i / steps;
-      deposit(x0 + (x1 - x0) * t, y0 + (y1 - y0) * t, amplitude);
+      const x = x0 + (x1 - x0) * t;
+      const y = y0 + (y1 - y0) * t;
+      deposit(x, y, amplitude);
+      depositInk(x, y, config.ink * 0.6 * clamp(multiplier, 0, 1));
     }
 
     encode();
@@ -333,6 +456,7 @@
     let steps = 0;
     while (accumulator >= 1 / 60 && steps < 4) {
       stepWave();
+      stepInk();
       accumulator -= 1 / 60;
       steps += 1;
     }

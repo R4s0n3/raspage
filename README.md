@@ -10,8 +10,9 @@ two people can share a room and draw into the same water. Each day it is
 reshaped by a short, diary-like prompt: a mood, a day, a thought. The animation
 changes; the diary stays private.
 
-**Current mood:** *Unfinished Gold* — a high, open gold with cool air and a
-few trails drifting past.
+**Current mood:** *Drawing Water* — the evening sky held in still, dark water;
+the gold light breaks into glints, and whatever you draw glows like ink and
+fades.
 
 ## Run it
 
