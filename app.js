@@ -168,16 +168,21 @@
 
   // The water surface from interaction.js: a small height field uploaded as
   // a texture every frame. The shader turns its slope into weather.
-  const waveTexture = gl.createTexture();
+  // A second texture of the same size carries the colour of the ink.
+  const makeFieldTexture = () => {
+    const texture = gl.createTexture();
+    gl.bindTexture(gl.TEXTURE_2D, texture);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    return texture;
+  };
+  gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1);
+  const waveTexture = makeFieldTexture();
+  const tintTexture = makeFieldTexture();
   let waveTextureWidth = 0;
   let waveTextureHeight = 0;
-
-  gl.bindTexture(gl.TEXTURE_2D, waveTexture);
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-  gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1);
 
   const uploadWave = () => {
     const wave = interaction?.state?.wave;
@@ -185,41 +190,51 @@
       return;
     }
 
-    gl.activeTexture(gl.TEXTURE0);
-    gl.bindTexture(gl.TEXTURE_2D, waveTexture);
+    const resized =
+      wave.width !== waveTextureWidth || wave.height !== waveTextureHeight;
+    waveTextureWidth = wave.width;
+    waveTextureHeight = wave.height;
 
-    if (wave.width !== waveTextureWidth || wave.height !== waveTextureHeight) {
-      waveTextureWidth = wave.width;
-      waveTextureHeight = wave.height;
-      gl.texImage2D(
-        gl.TEXTURE_2D,
-        0,
-        gl.RGBA,
-        wave.width,
-        wave.height,
-        0,
-        gl.RGBA,
-        gl.UNSIGNED_BYTE,
-        wave.data,
-      );
-    } else {
-      gl.texSubImage2D(
-        gl.TEXTURE_2D,
-        0,
-        0,
-        0,
-        wave.width,
-        wave.height,
-        gl.RGBA,
-        gl.UNSIGNED_BYTE,
-        wave.data,
-      );
+    const upload = (unit, texture, pixels) => {
+      gl.activeTexture(unit);
+      gl.bindTexture(gl.TEXTURE_2D, texture);
+      if (resized) {
+        gl.texImage2D(
+          gl.TEXTURE_2D,
+          0,
+          gl.RGBA,
+          wave.width,
+          wave.height,
+          0,
+          gl.RGBA,
+          gl.UNSIGNED_BYTE,
+          pixels,
+        );
+      } else {
+        gl.texSubImage2D(
+          gl.TEXTURE_2D,
+          0,
+          0,
+          0,
+          wave.width,
+          wave.height,
+          gl.RGBA,
+          gl.UNSIGNED_BYTE,
+          pixels,
+        );
+      }
+    };
+
+    upload(gl.TEXTURE0, waveTexture, wave.data);
+    if (wave.tint) {
+      upload(gl.TEXTURE1, tintTexture, wave.tint);
     }
 
     set("u_waveTexel", [1 / wave.width, 1 / wave.height]);
   };
 
   setSampler("u_wave", 0);
+  setSampler("u_inkTint", 1);
   set("u_waveWarp", interaction ? (interactionConfig.warp ?? 1.0) : 0);
   set("u_waveGlow", interaction ? (interactionConfig.glow ?? 0.2) : 0);
 

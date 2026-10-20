@@ -34,6 +34,33 @@
     inkFlow: settings.inkFlow ?? 2.5,
   };
 
+  // Each person in a room draws in their own colour. The relay assigns a
+  // slot; the colours come from the mood (water.inkColors), or a single
+  // light-to-glow blend when the mood does not name any.
+  const hexToRgb = (hex) => {
+    let value = String(hex || "").replace("#", "").trim();
+    if (value.length === 3) {
+      value = value.split("").map((part) => part + part).join("");
+    }
+    const number = Number.parseInt(value || "ffffff", 16);
+    return [
+      ((number >> 16) & 255) / 255,
+      ((number >> 8) & 255) / 255,
+      (number & 255) / 255,
+    ];
+  };
+  const inkColors = (() => {
+    const named = mood.water?.inkColors;
+    if (Array.isArray(named) && named.length > 0) {
+      return named.map(hexToRgb);
+    }
+    const light = hexToRgb(mood.palette?.light ?? "#e8e4d4");
+    const glow = hexToRgb(mood.palette?.glow ?? "#ffc080");
+    return [light.map((value, i) => value + (glow[i] - value) * 0.35)];
+  })();
+  const inkColor = (slot) =>
+    inkColors[((Math.round(slot) || 0) % inkColors.length + inkColors.length) % inkColors.length];
+
   // The surface gradient is stored next to the height so the shader can
   // interpolate smooth normals instead of differencing 8-bit heights.
   const GRADIENT_SCALE = 3;
@@ -45,6 +72,8 @@
     drawing: false,
     motionScale: reduce.matches ? config.reducedMotionScale : 1,
     wave: null,
+    // This visitor's colour slot; realtime.js sets it from the relay.
+    slot: 0,
     // Where the water was last touched (local or remote), normalized 0..1.
     touch: null,
   };
@@ -88,9 +117,17 @@
   let current = null;
   let previous = null;
   let next = null;
+  // Ink: amount, plus the same ink premultiplied by its colour.
   let ink = null;
+  let inkR = null;
+  let inkG = null;
+  let inkB = null;
   let inkNext = null;
+  let inkRNext = null;
+  let inkGNext = null;
+  let inkBNext = null;
   let inkLevel = 0;
+  let tint = null;
   let data = null;
   let accumulator = 0;
   let activePointer = null;
@@ -121,9 +158,16 @@
     previous = new Float32Array(size);
     next = new Float32Array(size);
     ink = new Float32Array(size);
+    inkR = new Float32Array(size);
+    inkG = new Float32Array(size);
+    inkB = new Float32Array(size);
     inkNext = new Float32Array(size);
+    inkRNext = new Float32Array(size);
+    inkGNext = new Float32Array(size);
+    inkBNext = new Float32Array(size);
     inkLevel = 0;
     data = new Uint8Array(size * 4);
+    tint = new Uint8Array(size * 4);
 
     for (let i = 0; i < size; i += 1) {
       data[i * 4] = 128;
@@ -132,7 +176,7 @@
       data[i * 4 + 3] = 0;
     }
 
-    state.wave = { width: cols, height: rows, data };
+    state.wave = { width: cols, height: rows, data, tint };
     accumulator = 0;
   };
 
@@ -159,12 +203,17 @@
         d[o + 1] = Math.round(clamp(0.5 + gx * GRADIENT_SCALE, 0, 1) * 255);
         d[o + 2] = Math.round(clamp(0.5 + gy * GRADIENT_SCALE, 0, 1) * 255);
         d[o + 3] = Math.round(clamp(ink[i], 0, 1) * 255);
+        tint[o] = Math.round(clamp(inkR[i], 0, 1) * 255);
+        tint[o + 1] = Math.round(clamp(inkG[i], 0, 1) * 255);
+        tint[o + 2] = Math.round(clamp(inkB[i], 0, 1) * 255);
+        tint[o + 3] = 255;
       }
     }
   };
 
   // Ink drawn into the water: it runs down the slope of the ripples,
-  // spreads a little, and fades. Nothing stays.
+  // spreads a little, and fades. Nothing stays. The coloured channels move
+  // with the amount, so each person's colour stays their own.
   const stepInk = () => {
     if (inkLevel <= 0) {
       return;
@@ -176,6 +225,14 @@
     const spread = config.inkSpread;
     const flow = config.inkFlow;
     let level = 0;
+
+    const carry = (field, j, fx, fy) => {
+      const top = field[j] + (field[j + 1] - field[j]) * fx;
+      const bottom = field[j + cols] + (field[j + cols + 1] - field[j + cols]) * fx;
+      return top + (bottom - top) * fy;
+    };
+    const around = (field, i) =>
+      (field[i - 1] + field[i + 1] + field[i - cols] + field[i + cols]) * 0.25;
 
     for (let y = 1; y < rows - 1; y += 1) {
       const row = y * cols;
@@ -192,30 +249,48 @@
         const fx = sx - ix;
         const fy = sy - iy;
         const j = iy * cols + ix;
-        const top = ink[j] + (ink[j + 1] - ink[j]) * fx;
-        const bottom = ink[j + cols] + (ink[j + cols + 1] - ink[j + cols]) * fx;
-        const carried = top + (bottom - top) * fy;
 
-        const around =
-          (ink[i - 1] + ink[i + 1] + ink[i - cols] + ink[i + cols]) * 0.25;
-        const value = Math.max(
+        const amount = carry(ink, j, fx, fy);
+        const next = Math.max(
           0,
-          (carried + (around - carried) * spread) * fade - 0.0003,
+          (amount + (around(ink, i) - amount) * spread) * fade - 0.0003,
         );
-        inkNext[i] = value;
-        if (value > level) {
-          level = value;
+        // Keep the colour in proportion as the amount fades to nothing.
+        const r = carry(inkR, j, fx, fy);
+        const g = carry(inkG, j, fx, fy);
+        const b = carry(inkB, j, fx, fy);
+        const mixedR = r + (around(inkR, i) - r) * spread;
+        const mixedG = g + (around(inkG, i) - g) * spread;
+        const mixedB = b + (around(inkB, i) - b) * spread;
+        const mixedAmount = amount + (around(ink, i) - amount) * spread;
+        const scale = mixedAmount > 1e-5 ? next / mixedAmount : 0;
+
+        inkNext[i] = next;
+        inkRNext[i] = mixedR * scale;
+        inkGNext[i] = mixedG * scale;
+        inkBNext[i] = mixedB * scale;
+        if (next > level) {
+          level = next;
         }
       }
     }
 
-    const swap = ink;
+    let swap = ink;
     ink = inkNext;
     inkNext = swap;
+    swap = inkR;
+    inkR = inkRNext;
+    inkRNext = swap;
+    swap = inkG;
+    inkG = inkGNext;
+    inkGNext = swap;
+    swap = inkB;
+    inkB = inkBNext;
+    inkBNext = swap;
     inkLevel = level;
   };
 
-  const depositInk = (nx, ny, amount, radiusScale = 1) => {
+  const depositInk = (nx, ny, amount, color, radiusScale = 1) => {
     if (!ink || amount <= 0) {
       return;
     }
@@ -241,9 +316,22 @@
           continue;
         }
         const i = y * waveWidth + x;
-        ink[i] = Math.min(1, ink[i] + amount * Math.exp(-distance * 1.6));
-        if (ink[i] > inkLevel) {
-          inkLevel = ink[i];
+        const add = amount * Math.exp(-distance * 1.6);
+        let total = ink[i] + add;
+        inkR[i] += add * color[0];
+        inkG[i] += add * color[1];
+        inkB[i] += add * color[2];
+        if (total > 1) {
+          // Full: keep the mix, cap the amount.
+          const scale = 1 / total;
+          inkR[i] *= scale;
+          inkG[i] *= scale;
+          inkB[i] *= scale;
+          total = 1;
+        }
+        ink[i] = total;
+        if (total > inkLevel) {
+          inkLevel = total;
         }
       }
     }
@@ -333,14 +421,20 @@
     }
   };
 
-  const addDrop = (nx, ny, multiplier = 1) => {
+  const addDrop = (nx, ny, multiplier = 1, slot = state.slot) => {
     remember(nx, ny);
     deposit(nx, ny, config.tap * clamp(multiplier, 0, 1));
-    depositInk(nx, ny, config.ink * 0.9 * clamp(multiplier, 0, 1), 1.5);
+    depositInk(
+      nx,
+      ny,
+      config.ink * 0.9 * clamp(multiplier, 0, 1),
+      inkColor(slot),
+      1.5,
+    );
     encode();
   };
 
-  const addStroke = (x0, y0, x1, y1, multiplier = 1) => {
+  const addStroke = (x0, y0, x1, y1, multiplier = 1, slot = state.slot) => {
     if (!current) {
       return;
     }
@@ -351,13 +445,14 @@
     const distance = Math.hypot(dx, dy);
     const steps = Math.max(1, Math.ceil(distance / Math.max(0.8, config.spacing)));
     const amplitude = config.drop * clamp(multiplier, 0, 1);
+    const color = inkColor(slot);
 
     for (let i = 1; i <= steps; i += 1) {
       const t = i / steps;
       const x = x0 + (x1 - x0) * t;
       const y = y0 + (y1 - y0) * t;
       deposit(x, y, amplitude);
-      depositInk(x, y, config.ink * 0.6 * clamp(multiplier, 0, 1));
+      depositInk(x, y, config.ink * 0.6 * clamp(multiplier, 0, 1), color);
     }
 
     encode();

@@ -47,6 +47,7 @@ window.MOODPAGE_SHADER = {
     uniform float u_rain;
 
     uniform sampler2D u_wave;
+    uniform sampler2D u_inkTint; // ink premultiplied by each person's colour
     uniform vec2 u_waveTexel;
     uniform float u_waveWarp;
     uniform float u_waveGlow;
@@ -378,7 +379,10 @@ window.MOODPAGE_SHADER = {
         ) * 0.25;
         // Pigment gathers at the edge of a wet stroke.
         float edge = max(inkHere - inkAround, 0.0);
-        vec3 inkColor = mix(u_light, u_glow, 0.3 + 0.5 * nearLight);
+        // Whose ink this is: the colour, un-premultiplied by the amount.
+        vec3 inkColor = texture2D(u_inkTint, iuv).rgb / max(inkHere, 0.02);
+        inkColor = clamp(inkColor, 0.0, 1.0);
+        inkColor = mix(inkColor, u_glow, 0.12 * nearLight);
         float inkLight = inkHere * 0.6 + edge * 2.2 + inkAround * 0.22;
         col += inkColor * inkLight * (0.8 + 0.4 * crest) * u_ink;
       }

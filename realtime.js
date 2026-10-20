@@ -81,12 +81,20 @@
       return;
     }
 
-    if (message.t === "drop") {
+    // The colour slot of whoever drew it; the relay stamps it on.
+    const slot = Number.isInteger(message.c) && message.c >= 0 ? message.c : 0;
+
+    if (message.t === "welcome") {
+      if (Number.isInteger(message.slot) && message.slot >= 0) {
+        interaction.state.slot = message.slot;
+      }
+    } else if (message.t === "drop") {
       if (valid(message.x, 0, 1) && valid(message.y, 0, 1)) {
         interaction.addDrop(
           message.x,
           message.y,
           valid(message.s, 0, 1) ? message.s : 1,
+          slot,
         );
       }
     } else if (message.t === "stroke") {
@@ -102,6 +110,7 @@
           message.x1,
           message.y1,
           valid(message.s, 0, 1) ? message.s : 1,
+          slot,
         );
       }
     } else if (message.t === "full") {
@@ -161,6 +170,8 @@
 
     socket.addEventListener("close", () => {
       socket = null;
+      // Alone again: back to the first colour until the next room.
+      interaction.state.slot = 0;
       schedule();
     });
 

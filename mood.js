@@ -43,6 +43,15 @@ window.MOOD = {
     glints: 0.85, // the light's broken path on the surface
     inkGlow: 0.75, // how brightly drawn ink shows in the water
     plankton: 0.8, // tiny living sparks that wake when the water is touched
+    // One ink colour per person in a room, in the order they arrive. Keep
+    // them close in brightness so no one shouts; the first is the light's own.
+    inkColors: [
+      "#ffcf8a", // the gold of the light
+      "#a8e6d4", // seafoam
+      "#f3ab9f", // dusk rose
+      "#c4bdf3", // lavender mist
+      "#a9d6f2", // moonlit blue
+    ],
   },
 
   life: {

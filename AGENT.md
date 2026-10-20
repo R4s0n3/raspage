@@ -257,6 +257,7 @@ block (or set the fields to `0`) for open air; every older mood looks as it did.
 | `glints` | `0–1` | the light's broken path: a narrow column of flickering points running down from the light |
 | `inkGlow` | `0–1.2` | how brightly ink drawn by a touch shows in the water (needs `interaction.ink`) |
 | `plankton` | `0–1` | tiny living sparks in the water: they breathe faintly and light up wherever the surface is disturbed |
+| `inkColors` | up to 5 hex colours | one ink colour per person in a room, by arrival order (the relay assigns each person the lowest free slot and stamps it on their gestures, so every screen agrees). Choose them for the mood: close in brightness, gently different in hue. Without the list everyone draws in one light-to-glow blend |
 
 Water days read best with the light high (`lightY .25–.4`) so its glint path
 has room to run towards the viewer, and with `motes.flatten` so the streams
@@ -436,7 +437,9 @@ one is started. Add `?room=CODE` to the URL to meet someone in a specific room
 the link: strangers are never placed in them, and a sixth person asking for a
 full named room is turned away and keeps running alone, silently retrying. The
 room is ephemeral: the server stores nothing and only forwards normalized drops
-and strokes to the others.
+and strokes to the others. Each person in a room also gets a colour slot
+(`welcome.slot`); relayed `drop`/`stroke` messages carry the sender's slot as
+`c`, and the page draws their ink in `water.inkColors[c]`.
 
 The Node app serves the page and the relay on the same origin:
 

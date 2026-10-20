@@ -84,6 +84,20 @@ const findRoom = () => {
   return best;
 };
 
+// Each person in a room gets the lowest free colour slot, so everyone in the
+// room sees the same person drawing in the same colour.
+const freeSlot = (room) => {
+  const taken = new Set();
+  for (const other of room.clients) {
+    taken.add(other.slot);
+  }
+  let slot = 0;
+  while (taken.has(slot)) {
+    slot += 1;
+  }
+  return slot;
+};
+
 const send = (client, message) => {
   if (client.readyState === WebSocket.OPEN) {
     client.send(JSON.stringify(message));
@@ -208,6 +222,7 @@ const wss = new WebSocketServer({ server });
 wss.on("connection", (client) => {
   client.isAlive = true;
   client.room = null;
+  client.slot = 0;
   client.windowStarted = Date.now();
   client.windowCount = 0;
 
@@ -272,6 +287,7 @@ wss.on("connection", (client) => {
       }
 
       const room = rooms.get(code);
+      client.slot = freeSlot(room);
       room.clients.add(client);
       client.room = code;
 
@@ -280,6 +296,7 @@ wss.on("connection", (client) => {
         room: code,
         peers: room.clients.size,
         max: MAX_PER_ROOM,
+        slot: client.slot,
       });
       broadcast(room, { t: "peer", peers: room.clients.size }, client);
       return;
@@ -303,6 +320,7 @@ wss.on("connection", (client) => {
             x: message.x,
             y: message.y,
             s: number(message.s, 0, 1) ? message.s : 1,
+            c: client.slot,
           },
           client,
         );
@@ -323,6 +341,7 @@ wss.on("connection", (client) => {
             x1: message.x1,
             y1: message.y1,
             s: number(message.s, 0, 1) ? message.s : 1,
+            c: client.slot,
           },
           client,
         );
