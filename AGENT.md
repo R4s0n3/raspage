@@ -202,12 +202,19 @@ the shared rooms.
 - **Rooms (`realtime.js` + `server.js`)** — rooms of up to five people in the
   same water. The client forwards normalized drops and strokes to the relay,
   which echoes them to the others in the room and stores nothing.
-- **Sound (`sound.js`)** — Web Audio, built from looped pink and brown noise
-  and a few sine voices; no files. A bed of lapping water (low-passed noise
-  that swells and settles) and moving air (a wandering band of noise), rare
-  distant drips, a small rising "plop" for every drop and a hushed stir along
-  strokes, both heard from `onDisturb()` (so the room is heard too), panned
-  by position, through a soft synthetic room and a gentle limiter.
+- **Sound (`sound.js`)** — Web Audio, built from looped noise and sine
+  voices; no files. It is made for close listening on headphones: a wide,
+  decorrelated stereo bed of lapping water (with a slosh as each swell
+  arrives and a fizz of foam as it recedes) and moving air; a fine crackle of
+  tiny bubbles that thickens where the water was just touched; drops built
+  from a contact click, a ringing bubble that rises in pitch, a low body and
+  splash-back droplets; and one hush-and-trickle voice per finger, following
+  it. Drops and fingers are placed binaurally (HRTF panner) from their page
+  position — the bottom of the screen is close, the top is far out. All of it
+  hears gestures through `onDisturb()`, so the room is heard too. A damped
+  stereo room with early reflections and pre-delay, a warmth shelf, and a
+  soft limiter finish it. Texture is scheduled slightly ahead on the audio
+  clock, and short voices are capped and cleaned up.
 
 The visual layers pause when the tab is hidden and resume without a time jump.
 The interaction module also stops accumulating while hidden.
@@ -330,10 +337,17 @@ suspended while the tab is hidden. Keep it quiet: it should be noticed late.
 | `pitch` | `0.6–1.5` | drop pitch: low = heavy, high = light and glassy |
 | `stir` | `0–1` | the hush of a hand moving through water |
 | `space` | `0–0.8` | how much room/reverb surrounds the sounds |
+| `foam` | `0–1` | fizz of foam as each swell draws back |
+| `detail` | `0–1` | the fine crackle of tiny bubbles; quiet at rest, livelier where touched |
+| `splash` | `0–1` | droplets thrown up around a drop |
+| `width` | `0–1` | how wide the stereo bed opens; `0` = centred |
+| `warmth` | `0–1` | low shelf up, high shelf down: more body, less edge |
+| `binaural` | `0` / `1` | `1` places drops and fingers around the head with HRTF (best on headphones); `0` = plain stereo panning |
 
 | The day feels… | Try |
 | --- | --- |
-| calm, held | `water .5`, `lap .2`, `wind .2`, `drips 4`, `space .4` |
+| calm, held | `water .5`, `lap .2`, `wind .2`, `drips 4`, `space .4`, `detail .4` |
+| tingly, intimate | `detail .7`, `splash .6`, `space .2`, `warmth .5`, `width .9` |
 | heavy, close | `windTone 300`, `lap .2`, `pitch .85`, `drips 2–3` |
 | open, bright | `windTone 800+`, `pitch 1.2`, `space .5` |
 | restless | `lap .8`, `wind .6`, `drips 10` |

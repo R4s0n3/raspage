@@ -82,6 +82,12 @@ window.MOOD = {
     pitch: 0.85, // a little lower and heavier than a clear day
     stir: 0.5, // the hush of a hand moving through the water
     space: 0.3, // how much room the sound has around it
+    foam: 0.35, // fizz of foam as each swell draws back
+    detail: 0.45, // the fine crackle of tiny bubbles; wakes where it is touched
+    splash: 0.4, // droplets thrown up around a drop
+    width: 0.85, // how wide the bed opens around the head
+    warmth: 0.65, // more body, less edge
+    binaural: 1, // place drops and fingers around the head (headphones)
   },
 
   motes: {
