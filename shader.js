@@ -46,17 +46,10 @@ window.MOODPAGE_SHADER = {
     uniform float u_stars;
     uniform float u_rain;
 
-    uniform vec2 u_stirPos;
-    uniform vec2 u_stirVel;
-    uniform float u_stirStrength;
-    uniform float u_stirRadius;
-    uniform float u_stirPush;
-    uniform float u_stirSwirl;
-
-    uniform vec2 u_ripplePos;
-    uniform float u_rippleAge;
-    uniform float u_rippleStrength;
-    uniform float u_rippleSpeed;
+    uniform sampler2D u_wave;
+    uniform vec2 u_waveTexel;
+    uniform float u_waveWarp;
+    uniform float u_waveGlow;
 
     uniform float u_contrast;
     uniform float u_saturation;
@@ -164,30 +157,27 @@ window.MOODPAGE_SHADER = {
       vec2 p = (uv - 0.5) * vec2(aspect, 1.0);
       float t = u_time;
 
-      // Touch and drag bend the weather without replacing it.
+      // Water left by a touch. The slope of the surface bends the weather,
+      // and the crests catch a little light. u_wave is a coarse height field
+      // written by interaction.js.
       vec2 warp = vec2(0.0);
-      float rippleGlow = 0.0;
+      float waveLight = 0.0;
 
-      if (u_stirStrength > 0.001) {
-        vec2 stir = p - u_stirPos;
-        float stirDist = length(stir) + 0.0001;
-        float stirFalloff =
-          exp(-pow(stirDist / max(u_stirRadius, 0.001), 2.0) * 1.6);
-        vec2 stirDir = stir / stirDist;
-        vec2 stirTangent = vec2(-stirDir.y, stirDir.x);
-        warp += (stirTangent * u_stirSwirl + u_stirVel * u_stirPush) *
-          stirFalloff * u_stirStrength;
-      }
+      if (u_waveWarp > 0.001 || u_waveGlow > 0.001) {
+        // The height field is written top-down; the shader's uv is bottom-up.
+        vec2 wuv = vec2(uv.x, 1.0 - uv.y);
+        float wave = texture2D(u_wave, wuv).r - 0.5;
+        float waveL = texture2D(u_wave, wuv - vec2(u_waveTexel.x, 0.0)).r - 0.5;
+        float waveR = texture2D(u_wave, wuv + vec2(u_waveTexel.x, 0.0)).r - 0.5;
+        float waveD = texture2D(u_wave, wuv - vec2(0.0, u_waveTexel.y)).r - 0.5;
+        float waveU = texture2D(u_wave, wuv + vec2(0.0, u_waveTexel.y)).r - 0.5;
+        vec2 waveGrad = vec2(waveR - waveL, waveU - waveD) * 0.5;
+        float slope = length(waveGrad);
 
-      if (u_rippleStrength > 0.001) {
-        vec2 ripple = p - u_ripplePos;
-        float rippleDist = length(ripple) + 0.0001;
-        float rippleRadius = u_rippleAge * u_rippleSpeed;
-        float rippleWidth = 0.03 + u_rippleAge * 0.06;
-        float ring = exp(-pow((rippleDist - rippleRadius) / rippleWidth, 2.0));
-        float fade = max(0.0, 1.0 - u_rippleAge);
-        rippleGlow = ring * fade;
-        warp += (ripple / rippleDist) * rippleGlow * u_rippleStrength * 0.035;
+        waveLight =
+          smoothstep(0.015, 0.16, wave) * 0.62 +
+          smoothstep(0.008, 0.075, slope) * 0.38;
+        warp = waveGrad * u_waveWarp;
       }
 
       vec2 lp = u_lightPos;
@@ -241,8 +231,8 @@ window.MOODPAGE_SHADER = {
 
       col = mix(col, cloudShade, cloud * 0.88);
 
-      // The ring of a tap moving through the air.
-      col += mix(u_light, u_glow, 0.45) * rippleGlow * u_rippleStrength * 0.1;
+      // Light caught on the moving surface of the water.
+      col += mix(u_light, u_glow, 0.42) * waveLight * u_waveGlow;
 
       // Light diffusing through the weather.
       col += mix(u_glow, u_light, 0.3) * halo * 0.13 * u_lightIntensity * (1.0 - cloud * 0.45);

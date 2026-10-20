@@ -23,11 +23,15 @@ Translate it into light, colour, weather, density, tempo, and movement.
 - **One coherent world.** A day may change the palette and weather, but it must
   still feel like the same place. Keep the atmospheric cloud engine and the
   drifting light streams; bend them, don't replace the site with a new app.
-- **Interaction is weather, not UI.** Dragging stirs the existing clouds and
-  streams; a tap sends a slow ring. It must settle back into the same world: no
-  controls, score, cursor trails, or audio. Keep the amplitudes in `mood.js`.
-- **No build step and no framework.** Vanilla HTML, CSS, and JS. No npm
-  dependencies, external fonts, image libraries, or CDNs.
+- **Interaction is weather, not UI.** Touching the page is touching water: a
+  drag leaves a soft wake of ripples and a tap drops a stone. The water bends
+  the clouds and nudges the streams, then fades back into the same world. No
+  controls, persistent marks, cursor trails, or audio. Keep the amplitudes in
+  `mood.js`.
+- **No build step and no framework.** The page is vanilla HTML, CSS, and JS: no
+  npm dependencies, external fonts, image libraries, or CDNs. The optional
+  two-person room relay in `server/` is a separate Node process and uses one
+  small dependency (`ws`); the page does not need it to run.
 - **Every visible colour comes from `mood.js`.** The CSS fallback keeps its own
   defaults, but the live page must not contain hard-coded scene colours.
 - **Respect reduced motion.** `prefers-reduced-motion` must noticeably slow the
@@ -146,19 +150,22 @@ them. Choose one dominant feeling, one supporting colour, and one surprise.
 index.html          page shell, hidden accessibility text
 styles.css          full-bleed layout, CSS fallback, veil + grain
 mood.js             THE CURRENT MOOD — edit this each day
-interaction.js      pointer/touch physics: stir, ripple, motion scaling
+interaction.js      water height field, pointer/touch, motion scaling
 shader.js           WebGL atmosphere: clouds, light, shader dust
-app.js              WebGL setup, interaction uniforms, motion/time
+app.js              WebGL setup, water texture, motion/time
 motes.js            2D layer: long light streams, dust, bokeh
+realtime.js         two-person room client (optional, needs server/)
+server/             tiny WebSocket relay for the rooms (Node, optional)
 favicon.svg         small static mark
 journal/            one atmospheric log per day
 AGENT.md            this file
 README.md           human-facing overview and run instructions
 ```
 
-The page loads five classic scripts in this order: `mood.js`, `interaction.js`,
-`shader.js`, `app.js`, then `motes.js`. No bundler and no server code are
-required.
+The page loads six classic scripts in this order: `mood.js`, `interaction.js`,
+`shader.js`, `app.js`, `motes.js`, then `realtime.js`. No bundler and no server
+code are required for the page itself; `realtime.js` and `server/` only power
+the optional two-person rooms.
 
 ### How the layers work
 
@@ -172,9 +179,15 @@ required.
   small screens. Each stream keeps a pixel-length history so trails look
   consistent across refresh rates, and the scene is warmed up before the first
   frame.
-- **Touch (`interaction.js`)** — a short-lived current driven by dragging, plus
-  a ring from tapping. It feeds a cloud warp into the shader and a force field
-  into the streams; both decay back into the mood. It owns no pixels of its own.
+- **Water (`interaction.js`)** — a coarse height-field wave equation. A drag
+  deposits a line of small drops and a tap deposits one larger drop; the
+  surface spreads and fades. It feeds the cloud warp and crest light into the
+  shader, and a slope force into the streams; both decay back into the mood.
+  The field is also rendered to a small texture, which is its only pixel
+  presence.
+- **Rooms (`realtime.js` + `server/`)** — an optional two-person relay for the
+  same water. It forwards normalized drops and strokes to the other client in
+  a room and stores nothing.
 
 The visual layers pause when the tab is hidden and resume without a time jump.
 The interaction module also stops accumulating while hidden.
@@ -248,26 +261,30 @@ trails feel like memory; short trails feel like nerve.
 
 ### `interaction`
 
-How much the weather lets itself be disturbed. The module stays on when the
-block is omitted, using gentle engine defaults; a day can make itself more
-yielding or more held.
+The touch layer is a small water surface. `interaction.js` runs a coarse
+height-field wave equation; a drag deposits a line of drops along its path and a
+tap deposits one larger drop. The shader bends the clouds along the surface
+slope and lights the crests, and the streams ride the same slope. The module
+stays on when the block is omitted, using gentle engine defaults.
 
 | Field | Range (comfortable) | Effect |
 | --- | --- | --- |
-| `radius` | `0.25–0.6` | size of the drag's cloud vortex, in scene units |
-| `push` | `0–0.15` | cloud displacement from drag velocity |
-| `swirl` | `0–0.15` | cloud displacement from the vortex |
-| `streamWake` | `0–0.4` | share of drag velocity nearby streams inherit |
-| `streamSwirl` | `0–120` px/s | vortex speed added to nearby streams |
-| `rippleSpeed` | `0.25–0.7` | how far a tap ring travels over its life |
-| `rippleStrength` | `0.3–2` | brightness and distortion of the tap ring |
-| `lightPull` | `0–0.3` | how far the focal light leans toward a drag |
-| `reducedMotionScale` | `0.1–0.6` | scale applied to interaction under reduced motion |
+| `rows` | `64–128` | height of the simulation grid; columns follow the viewport aspect so cells stay roughly square |
+| `radius` | `2–5` cells | radius of a single drop |
+| `drop` | `0.02–0.15` | height added by each stamp along a drag |
+| `tap` | `0.3–1.2` | height added by a tap |
+| `spacing` | `1.5–4` cells | distance between deposits along a drag |
+| `speed` | `0.15–0.4` | wave propagation; `0.5` is the stable maximum |
+| `damping` | `0.993–0.999` | how quickly the water goes still (higher = longer) |
+| `streamPush` | `200–1600` px/s | how strongly streams ride the surface slope |
+| `warp` | `0.5–2.5` | cloud displacement from the surface slope |
+| `glow` | `0.1–0.5` | light caught on the crests |
+| `reducedMotionScale` | `0.1–0.6` | scales the visual force and slows propagation |
 
-A tap ring lives for 2.8 seconds and the next tap replaces it. A drag relaxes in
-about a second after release. Both are amplitude-based, not event scripts: no
-click counters, no persistent state. Set the amplitudes to `0` to make a day
-still to the touch.
+A tap should read as a stone: a clear ring that spreads and fades over several
+seconds. A drag should leave a wake that follows the finger, then relax. The
+water is ephemeral: no persistent strokes, scores, or stored paths. Set `tap`,
+`drop`, `warp`, `glow`, and `streamPush` low to make a day still to the touch.
 
 ### `motion`
 
@@ -275,8 +292,7 @@ still to the touch.
   carry the visible tempo. `0.24` is the current threshold.
 - `drift` (`0–0.2`) — horizontal travel of the weather.
 - `parallax` (`0–1`) — how far the focal light follows the pointer. Keep subtle
-  (`.3–.7`). Pointer and touch share this path; drags additionally pull through
-  the `interaction` block.
+  (`.3–.7`). Pointer and touch share this path; the water is a separate layer.
 - `reducedMotionScale` (`0.05–0.3`) — multiplier for the sky when reduced
   motion is requested.
 
@@ -330,17 +346,47 @@ default to zero for old moods.
 
 ### Pointer and touch
 
-`interaction.js` owns pointer state. Hover only supplies the small focal
-parallax. Dragging pulls a temporary current through the cloud field; streams
-near the pointer inherit part of the drag velocity and turn around it. A quick
-tap sends one slow ring outward, which bends the clouds and pushes the streams
-as it passes. Both settle back into the mood: no lingering cursor trail, no
-persistent UI, no audio.
+`interaction.js` owns the water. Hover only supplies the small focal parallax. A
+pointer-down drops a stone; pointer-moves deposit a line of smaller drops along
+the path; a tap is a single stone. The height field is stepped at a fixed 60 Hz
+with an accumulator, encoded into a small RGBA texture each frame, and read by
+the shader (cloud warp and crest light) and by `motes.js` (slope push on the
+streams). The canvas keeps `touch-action: none` so a drag never scrolls the
+page. Do not add a second interaction layer on top; extend the water fields in
+`mood.js` instead, with new config fields.
 
-The canvas keeps `touch-action: none` so a drag never scrolls the page. Do not
-add a second interaction layer (cursor followers, click bursts, particle
-weapons) on top; extend the stir and ripple in `interaction.js` instead, with
-new config fields in `mood.js`.
+### Two-person rooms
+
+`realtime.js` and `server/` add an optional, wordless room. Each room holds at
+most two people; connections without a room are paired with the first room that
+has space. Add `?room=CODE` to the URL to meet someone in a specific room
+(letters, digits, `_`, `-`; up to 16 characters). A third person asking for a
+full room is turned away and keeps running alone, silently retrying. The room is
+ephemeral: the server stores nothing and only forwards normalized drops and
+strokes to the other client.
+
+Run the relay locally:
+
+```bash
+cd server
+npm install
+npm start
+```
+
+The page served from `localhost` uses the relay when a room is in the URL
+(`?room=CODE`); a plain local page stays solo, so it never logs connection
+errors when the relay is not running. A `?ws=wss://...` query parameter
+overrides the meta for testing on another host. For a deployed page, set the
+`moodpage-ws` meta tag in `index.html` to the relay's public `wss://` URL.
+Visitors without a room are then paired into rooms of at most two. GitHub Pages
+is static and cannot host the relay; use a small VPS or a Node host. Without a
+configured URL the page runs solo, exactly as before.
+
+The server rate-limits messages, caps the number of rooms, and expires empty
+rooms. Keep its protocol tiny: `drop` and `stroke` carry normalized `0..1`
+coordinates, so the same gesture lands in the same relative place on different
+screens. Do not add names, chat, or persistent room state without revisiting
+the privacy and no-UI rules.
 
 ### Performance
 
@@ -351,11 +397,12 @@ expensive, in order:
 2. lower `motes.streamers`, `dust`, or `trailLength`
 3. simplify the shader
 
-The interaction is deliberately cheap: a few uniforms, one pointer loop, and a
-per-stream force check. Do not turn it into a fluid solver or a second
-full-screen pass without measuring on a phone. Do not use canvas shadows,
-per-particle gradients, CSS blur filters, or large animated SVG filters. The
-current grain is a single static overlay.
+The water field is deliberately small (roughly 5k–15k cells) and runs on the CPU;
+it is not a fluid solver and not a second full-screen pass. Do not raise `rows`
+without measuring on a phone. The texture upload is one small RGBA buffer per
+frame. The rest of the interaction is a pointer loop and a per-stream slope
+read. Do not add canvas shadows, per-particle gradients, CSS blur filters, or
+large animated SVG filters. The current grain is a single static overlay.
 
 ---
 
@@ -370,10 +417,15 @@ current grain is a single static overlay.
 - [ ] `prefers-reduced-motion` still results in a slower, calmer animation
 - [ ] Focus/hover does not cause anything to jump; only a deliberate drag or
       tap disturbs the weather
-- [ ] Dragging stirs the clouds and streams; releasing settles without a jump
-- [ ] A tap sends one soft ring and does not trigger a browser gesture
+- [ ] Dragging leaves a soft wake that follows the pointer and fades
+- [ ] A tap drops a stone: a ring spreads and fades over several seconds,
+      without triggering a browser gesture
 - [ ] Touch-and-drag works on a phone without scrolling the page
 - [ ] Interaction is reduced, not removed, under reduced motion
+- [ ] Two pages in the same room see each other's ripples; a third page is
+      refused; `GET /health` reports one room with two clients
+- [ ] With no relay configured, the page still loads and runs solo without
+      console errors
 - [ ] Palette contrast is readable as an atmosphere, not mud; the light feels
       intentional
 - [ ] Performance is acceptable; no obvious stutter
@@ -485,6 +537,9 @@ the staying-in are in the enclosure; the "softening" is in the clearing light.
 - Remote: `origin` → `R4s0n3/raspage` on GitHub.
 - The site is static at the repository root; GitHub Pages can serve `main` /
   `/` directly.
+- The room relay in `server/` is not part of the Pages build. Deploy it
+  separately and set the `moodpage-ws` meta tag to its `wss://` URL. If the
+  relay is offline, the page falls back to solo.
 - Commit once per day (or once per addendum), with the mood in the message.
 - Never force-push over another morning's entry. Pull first if the remote has
   changed.

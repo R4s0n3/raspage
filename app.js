@@ -130,6 +130,13 @@
     }
   };
 
+  const setSampler = (name, unit) => {
+    const location = uniforms[name];
+    if (location) {
+      gl.uniform1i(location, unit);
+    }
+  };
+
   const palette = mood.palette;
   set("u_night", color(palette.night));
   set("u_deep", color(palette.deep));
@@ -151,12 +158,62 @@
   set("u_stars", mood.atmosphere.stars);
   set("u_rain", mood.atmosphere.rain);
 
-  set("u_stirRadius", interactionConfig.radius ?? 0.3);
-  set("u_stirPush", interactionConfig.push ?? 0.03);
-  set("u_stirSwirl", interactionConfig.swirl ?? 0.035);
-  set("u_stirStrength", 0);
-  set("u_rippleSpeed", interactionConfig.rippleSpeed ?? 0.45);
-  set("u_rippleStrength", 0);
+  // The water surface from interaction.js: a small height field uploaded as
+  // a texture every frame. The shader turns its slope into weather.
+  const waveTexture = gl.createTexture();
+  let waveTextureWidth = 0;
+  let waveTextureHeight = 0;
+
+  gl.bindTexture(gl.TEXTURE_2D, waveTexture);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+  gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1);
+
+  const uploadWave = () => {
+    const wave = interaction?.state?.wave;
+    if (!wave || !wave.data) {
+      return;
+    }
+
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, waveTexture);
+
+    if (wave.width !== waveTextureWidth || wave.height !== waveTextureHeight) {
+      waveTextureWidth = wave.width;
+      waveTextureHeight = wave.height;
+      gl.texImage2D(
+        gl.TEXTURE_2D,
+        0,
+        gl.RGBA,
+        wave.width,
+        wave.height,
+        0,
+        gl.RGBA,
+        gl.UNSIGNED_BYTE,
+        wave.data,
+      );
+    } else {
+      gl.texSubImage2D(
+        gl.TEXTURE_2D,
+        0,
+        0,
+        0,
+        wave.width,
+        wave.height,
+        gl.RGBA,
+        gl.UNSIGNED_BYTE,
+        wave.data,
+      );
+    }
+
+    set("u_waveTexel", [1 / wave.width, 1 / wave.height]);
+  };
+
+  setSampler("u_wave", 0);
+  set("u_waveWarp", interaction ? (interactionConfig.warp ?? 1.0) : 0);
+  set("u_waveGlow", interaction ? (interactionConfig.glow ?? 0.2) : 0);
 
   set("u_contrast", mood.grade.contrast);
   set("u_saturation", mood.grade.saturation);
@@ -228,53 +285,22 @@
     pointer.x += (pointerTarget.x - pointer.x) * ease;
     pointer.y += (pointerTarget.y - pointer.y) * ease;
 
-    const stir = interaction?.state?.stir;
-    const ripple = interaction?.state?.ripple;
-    const interactionScale = interaction?.state?.motionScale ?? 1;
-    const aspect = window.innerWidth / Math.max(window.innerHeight, 1);
-    let stirX = 0;
-    let stirY = 0;
-    let stirStrength = 0;
+    uploadWave();
 
-    if (stir) {
-      stirX = (stir.x / Math.max(window.innerWidth, 1) - 0.5) * aspect;
-      stirY = 0.5 - stir.y / Math.max(window.innerHeight, 1);
-      stirStrength = stir.strength * interactionScale;
-
-      let stirVelX = (stir.vx / Math.max(window.innerWidth, 1)) * aspect;
-      let stirVelY = -(stir.vy / Math.max(window.innerHeight, 1));
-      const stirSpeed = Math.hypot(stirVelX, stirVelY);
-      if (stirSpeed > 2) {
-        stirVelX = (stirVelX / stirSpeed) * 2;
-        stirVelY = (stirVelY / stirSpeed) * 2;
-      }
-
-      set("u_stirPos", [stirX, stirY]);
-      set("u_stirVel", [stirVelX, stirVelY]);
-      set("u_stirStrength", stirStrength);
-    } else {
-      set("u_stirStrength", 0);
-    }
-
-    if (ripple) {
-      const rippleX = (ripple.x / Math.max(window.innerWidth, 1) - 0.5) * aspect;
-      const rippleY = 0.5 - ripple.y / Math.max(window.innerHeight, 1);
-      const progress = Math.min(1, ripple.age / ripple.life);
-      set("u_ripplePos", [rippleX, rippleY]);
-      set("u_rippleAge", progress);
-      set(
-        "u_rippleStrength",
-        (interactionConfig.rippleStrength ?? 0.8) * interactionScale,
-      );
-    } else {
-      set("u_rippleStrength", 0);
-    }
+    // Reduced motion softens the water's visible force as well as slowing it.
+    const waveScale = interaction?.state?.motionScale ?? 1;
+    set(
+      "u_waveWarp",
+      interaction ? (interactionConfig.warp ?? 1.0) * waveScale : 0,
+    );
+    set(
+      "u_waveGlow",
+      interaction ? (interactionConfig.glow ?? 0.2) * waveScale : 0,
+    );
 
     const influence = mood.motion.parallax * 0.075;
-    const pull = (interactionConfig.lightPull ?? 0.12) * stirStrength;
-    const targetX = base[0] + pointer.x * influence + (stirX - base[0]) * pull;
-    const targetY =
-      base[1] - pointer.y * influence * 0.55 + (stirY - base[1]) * pull;
+    const targetX = base[0] + pointer.x * influence;
+    const targetY = base[1] - pointer.y * influence * 0.55;
     light[0] += (targetX - light[0]) * ease;
     light[1] += (targetY - light[1]) * ease;
 

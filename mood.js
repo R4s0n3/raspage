@@ -53,14 +53,16 @@ window.MOOD = {
   },
 
   interaction: {
-    radius: 0.4, // size of the stir in scene units
-    push: 0.08, // cloud displacement from drag velocity
-    swirl: 0.08, // cloud displacement from the vortex
-    streamWake: 0.22, // how much nearby streams follow the drag
-    streamSwirl: 65, // vortex speed added to nearby streams (px/s)
-    rippleSpeed: 0.45, // how far a tap ring travels over its life
-    rippleStrength: 1.4, // brightness and distortion of the tap ring
-    lightPull: 0.16, // how far the focal light leans toward a drag
+    rows: 96, // water grid height; cells stay roughly square at any viewport
+    radius: 3.0, // radius of a drop in grid cells
+    drop: 0.08, // height deposited by each point along a stroke
+    tap: 0.85, // height deposited by a single tap
+    spacing: 2.2, // cells between deposits along a stroke
+    speed: 0.27, // wave propagation, 0.5 is the stable maximum
+    damping: 0.997, // how quickly the water goes still
+    streamPush: 900, // how strongly streams ride the surface slope (px/s)
+    warp: 1.4, // cloud displacement from the surface slope
+    glow: 0.26, // light caught on the crests
     reducedMotionScale: 0.35,
   },
 

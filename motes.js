@@ -347,45 +347,44 @@
         (dx / distance) * orbit;
     }
 
-    if (interaction) {
-      const stir = interaction.state.stir;
-      const motionScale = interaction.state.motionScale;
-      const stirStrength = stir.strength * motionScale;
+    if (interaction?.state?.wave) {
+      const wave = interaction.state.wave;
+      const cols = wave.width;
+      const rows = wave.height;
 
-      if (stirStrength > 0.001) {
-        const sdx = particle.x - stir.x;
-        const sdy = particle.y - stir.y;
-        const sdist = Math.hypot(sdx, sdy) + 1;
-        const radius = height * (interactionConfig.radius ?? 0.3);
-        const falloff = Math.exp(-Math.pow(sdist / radius, 2) * 1.6);
-        const wake = interactionConfig.streamWake ?? 0.15;
-        const swirl = interactionConfig.streamSwirl ?? 46;
-
-        targetX +=
-          (stir.vx * wake + (-sdy / sdist) * swirl) * falloff * stirStrength;
-        targetY +=
-          (stir.vy * wake + (sdx / sdist) * swirl) * falloff * stirStrength;
-      }
-
-      const ripple = interaction.state.ripple;
-      if (ripple) {
-        const progress = Math.min(1, ripple.age / ripple.life);
-        const rdx = particle.x - ripple.x;
-        const rdy = particle.y - ripple.y;
-        const rdist = Math.hypot(rdx, rdy) + 1;
-        const radius =
-          progress * (interactionConfig.rippleSpeed ?? 0.45) * height;
-        const widthPx = (0.03 + progress * 0.06) * height;
-        const band = Math.exp(-Math.pow((rdist - radius) / widthPx, 2));
+      if (cols > 2 && rows > 2) {
+        const gx = Math.min(
+          cols - 1,
+          Math.max(
+            0,
+            Math.round((particle.x / Math.max(width, 1)) * (cols - 1)),
+          ),
+        );
+        const gy = Math.min(
+          rows - 1,
+          Math.max(
+            0,
+            Math.round((particle.y / Math.max(height, 1)) * (rows - 1)),
+          ),
+        );
+        const index = (gy * cols + gx) * 4;
+        const field = wave.data;
+        const left = (gx > 0 ? field[index - 4] : field[index]) / 255 - 0.5;
+        const right =
+          (gx < cols - 1 ? field[index + 4] : field[index]) / 255 - 0.5;
+        const up =
+          (gy > 0 ? field[index - cols * 4] : field[index]) / 255 - 0.5;
+        const down =
+          (gy < rows - 1 ? field[index + cols * 4] : field[index]) / 255 - 0.5;
+        const slopeX = (right - left) * 0.5;
+        const slopeY = (down - up) * 0.5;
         const push =
-          110 *
-          (interactionConfig.rippleStrength ?? 0.8) *
-          band *
-          (1 - progress) *
-          motionScale;
+          (interactionConfig.streamPush ?? 900) *
+          interaction.state.motionScale;
 
-        targetX += (rdx / rdist) * push;
-        targetY += (rdy / rdist) * push;
+        // A stream riding the slope of the water.
+        targetX += slopeX * push;
+        targetY += slopeY * push;
       }
     }
 
