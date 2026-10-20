@@ -2,10 +2,11 @@
 
 A living background for the weather inside.
 
-The page has no text, controls, or content — only an infinite atmosphere of
-slow clouds and drifting streams of light. Each day it is reshaped by a short,
-diary-like prompt: a mood, a day, a thought. The animation changes; the diary
-stays private.
+The page has no text, buttons, or content — only an infinite atmosphere of slow
+clouds and drifting streams of light. Drag to stir a current through it; tap to
+send a slow ring outward. Each day it is reshaped by a short, diary-like
+prompt: a mood, a day, a thought. The animation changes; the diary stays
+private.
 
 **Current mood:** *Unfinished Gold* — a high, open gold with cool air and a
 few trails drifting past.
@@ -40,8 +41,9 @@ words are paraphrased so the public repository never becomes a public diary.
 index.html          full-screen stage
 styles.css          layout, CSS fallback, veil and grain
 mood.js             the current mood (edited daily)
+interaction.js      drag and tap physics
 shader.js           WebGL atmosphere
-app.js              renderer, timing, pointer parallax
+app.js              renderer, timing, interaction uniforms
 motes.js            2D layer of light streams and dust
 journal/            dated, non-identifying mood logs
 AGENT.md            instructions for the next day
@@ -49,8 +51,10 @@ AGENT.md            instructions for the next day
 
 Under the hood: a single full-screen WebGL shader creates a domain-warped
 cloudscape with a focal light. A transparent 2D canvas above it draws long light
-trails that curl around that light, plus dust and bokeh. Both layers are
-time-based, pause when the tab is hidden, and slow down for
+trails that curl around that light, plus dust and bokeh. A small pointer-physics
+module feeds drag velocity and tap ripples into both layers, so touching the
+page bends the weather instead of adding a separate effect. Everything is
+time-based, pauses when the tab is hidden, and slows down for
 `prefers-reduced-motion`.
 
 ## Publishing

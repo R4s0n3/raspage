@@ -14,6 +14,9 @@
     return;
   }
 
+  const interaction = window.MOODPAGE_INTERACTION;
+  const interactionConfig = interaction?.config ?? {};
+
   const settings = mood.motes || {};
   const ctx = canvas.getContext("2d");
   if (!ctx) {
@@ -342,6 +345,48 @@
         Math.sin(angle) * config.speed * particle.speed +
         config.driftY +
         (dx / distance) * orbit;
+    }
+
+    if (interaction) {
+      const stir = interaction.state.stir;
+      const motionScale = interaction.state.motionScale;
+      const stirStrength = stir.strength * motionScale;
+
+      if (stirStrength > 0.001) {
+        const sdx = particle.x - stir.x;
+        const sdy = particle.y - stir.y;
+        const sdist = Math.hypot(sdx, sdy) + 1;
+        const radius = height * (interactionConfig.radius ?? 0.3);
+        const falloff = Math.exp(-Math.pow(sdist / radius, 2) * 1.6);
+        const wake = interactionConfig.streamWake ?? 0.15;
+        const swirl = interactionConfig.streamSwirl ?? 46;
+
+        targetX +=
+          (stir.vx * wake + (-sdy / sdist) * swirl) * falloff * stirStrength;
+        targetY +=
+          (stir.vy * wake + (sdx / sdist) * swirl) * falloff * stirStrength;
+      }
+
+      const ripple = interaction.state.ripple;
+      if (ripple) {
+        const progress = Math.min(1, ripple.age / ripple.life);
+        const rdx = particle.x - ripple.x;
+        const rdy = particle.y - ripple.y;
+        const rdist = Math.hypot(rdx, rdy) + 1;
+        const radius =
+          progress * (interactionConfig.rippleSpeed ?? 0.45) * height;
+        const widthPx = (0.03 + progress * 0.06) * height;
+        const band = Math.exp(-Math.pow((rdist - radius) / widthPx, 2));
+        const push =
+          110 *
+          (interactionConfig.rippleStrength ?? 0.8) *
+          band *
+          (1 - progress) *
+          motionScale;
+
+        targetX += (rdx / rdist) * push;
+        targetY += (rdy / rdist) * push;
+      }
     }
 
     const inertia = Math.min(1, dt * 2.4);

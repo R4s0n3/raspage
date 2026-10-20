@@ -23,6 +23,9 @@ Translate it into light, colour, weather, density, tempo, and movement.
 - **One coherent world.** A day may change the palette and weather, but it must
   still feel like the same place. Keep the atmospheric cloud engine and the
   drifting light streams; bend them, don't replace the site with a new app.
+- **Interaction is weather, not UI.** Dragging stirs the existing clouds and
+  streams; a tap sends a slow ring. It must settle back into the same world: no
+  controls, score, cursor trails, or audio. Keep the amplitudes in `mood.js`.
 - **No build step and no framework.** Vanilla HTML, CSS, and JS. No npm
   dependencies, external fonts, image libraries, or CDNs.
 - **Every visible colour comes from `mood.js`.** The CSS fallback keeps its own
@@ -143,8 +146,9 @@ them. Choose one dominant feeling, one supporting colour, and one surprise.
 index.html          page shell, hidden accessibility text
 styles.css          full-bleed layout, CSS fallback, veil + grain
 mood.js             THE CURRENT MOOD — edit this each day
+interaction.js      pointer/touch physics: stir, ripple, motion scaling
 shader.js           WebGL atmosphere: clouds, light, shader dust
-app.js              WebGL setup, pointer parallax, motion/time
+app.js              WebGL setup, interaction uniforms, motion/time
 motes.js            2D layer: long light streams, dust, bokeh
 favicon.svg         small static mark
 journal/            one atmospheric log per day
@@ -152,10 +156,11 @@ AGENT.md            this file
 README.md           human-facing overview and run instructions
 ```
 
-The page loads four classic scripts in this order: `mood.js`, `shader.js`,
-`app.js`, then `motes.js`. No bundler and no server code are required.
+The page loads five classic scripts in this order: `mood.js`, `interaction.js`,
+`shader.js`, `app.js`, then `motes.js`. No bundler and no server code are
+required.
 
-### How the two layers work
+### How the layers work
 
 - **Atmosphere (`shader.js`)** — a single full-screen WebGL triangle. Domain-
   warped fBm makes a slow cloudscape; five palette colours tint the air; a warm
@@ -167,8 +172,12 @@ The page loads four classic scripts in this order: `mood.js`, `shader.js`,
   small screens. Each stream keeps a pixel-length history so trails look
   consistent across refresh rates, and the scene is warmed up before the first
   frame.
+- **Touch (`interaction.js`)** — a short-lived current driven by dragging, plus
+  a ring from tapping. It feeds a cloud warp into the shader and a force field
+  into the streams; both decay back into the mood. It owns no pixels of its own.
 
-Both layers pause when the tab is hidden and resume without a time jump.
+The visual layers pause when the tab is hidden and resume without a time jump.
+The interaction module also stops accumulating while hidden.
 
 ---
 
@@ -237,13 +246,37 @@ A calm day is usually `streamers 100–150`, `orbit 5–12`, `speed 30–50`.
 A restless day can go to `streamers 220+`, `orbit 18–24`, `speed 70+`. Long
 trails feel like memory; short trails feel like nerve.
 
+### `interaction`
+
+How much the weather lets itself be disturbed. The module stays on when the
+block is omitted, using gentle engine defaults; a day can make itself more
+yielding or more held.
+
+| Field | Range (comfortable) | Effect |
+| --- | --- | --- |
+| `radius` | `0.25–0.6` | size of the drag's cloud vortex, in scene units |
+| `push` | `0–0.15` | cloud displacement from drag velocity |
+| `swirl` | `0–0.15` | cloud displacement from the vortex |
+| `streamWake` | `0–0.4` | share of drag velocity nearby streams inherit |
+| `streamSwirl` | `0–120` px/s | vortex speed added to nearby streams |
+| `rippleSpeed` | `0.25–0.7` | how far a tap ring travels over its life |
+| `rippleStrength` | `0.3–2` | brightness and distortion of the tap ring |
+| `lightPull` | `0–0.3` | how far the focal light leans toward a drag |
+| `reducedMotionScale` | `0.1–0.6` | scale applied to interaction under reduced motion |
+
+A tap ring lives for 2.8 seconds and the next tap replaces it. A drag relaxes in
+about a second after release. Both are amplitude-based, not event scripts: no
+click counters, no persistent state. Set the amplitudes to `0` to make a day
+still to the touch.
+
 ### `motion`
 
 - `speed` (`0.05–0.5`) — speed of the cloud field. Keep it slow; the streams
   carry the visible tempo. `0.24` is the current threshold.
 - `drift` (`0–0.2`) — horizontal travel of the weather.
 - `parallax` (`0–1`) — how far the focal light follows the pointer. Keep subtle
-  (`.3–.7`). Touch devices do not need special handling.
+  (`.3–.7`). Pointer and touch share this path; drags additionally pull through
+  the `interaction` block.
 - `reducedMotionScale` (`0.05–0.3`) — multiplier for the sky when reduced
   motion is requested.
 
@@ -297,10 +330,17 @@ default to zero for old moods.
 
 ### Pointer and touch
 
-`app.js` shifts the focal light slightly toward the pointer. It is a small
-parallax, not a cursor effect. Do not add trails to the cursor, click bursts, or
-audio. The page should remain a background even when touched; `touch-action:
-none` prevents accidental gestures from scrolling.
+`interaction.js` owns pointer state. Hover only supplies the small focal
+parallax. Dragging pulls a temporary current through the cloud field; streams
+near the pointer inherit part of the drag velocity and turn around it. A quick
+tap sends one slow ring outward, which bends the clouds and pushes the streams
+as it passes. Both settle back into the mood: no lingering cursor trail, no
+persistent UI, no audio.
+
+The canvas keeps `touch-action: none` so a drag never scrolls the page. Do not
+add a second interaction layer (cursor followers, click bursts, particle
+weapons) on top; extend the stir and ripple in `interaction.js` instead, with
+new config fields in `mood.js`.
 
 ### Performance
 
@@ -311,8 +351,11 @@ expensive, in order:
 2. lower `motes.streamers`, `dust`, or `trailLength`
 3. simplify the shader
 
-Do not use canvas shadows, per-particle gradients, CSS blur filters, or large
-animated SVG filters. The current grain is a single static overlay.
+The interaction is deliberately cheap: a few uniforms, one pointer loop, and a
+per-stream force check. Do not turn it into a fluid solver or a second
+full-screen pass without measuring on a phone. Do not use canvas shadows,
+per-particle gradients, CSS blur filters, or large animated SVG filters. The
+current grain is a single static overlay.
 
 ---
 
@@ -325,7 +368,12 @@ animated SVG filters. The current grain is a single static overlay.
       (390×844) sizes
 - [ ] Page still fills the viewport on resize and on a phone with a notch
 - [ ] `prefers-reduced-motion` still results in a slower, calmer animation
-- [ ] Focus/pointing at the page does not cause anything to jump
+- [ ] Focus/hover does not cause anything to jump; only a deliberate drag or
+      tap disturbs the weather
+- [ ] Dragging stirs the clouds and streams; releasing settles without a jump
+- [ ] A tap sends one soft ring and does not trigger a browser gesture
+- [ ] Touch-and-drag works on a phone without scrolling the page
+- [ ] Interaction is reduced, not removed, under reduced motion
 - [ ] Palette contrast is readable as an atmosphere, not mud; the light feels
       intentional
 - [ ] Performance is acceptable; no obvious stutter

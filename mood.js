@@ -52,6 +52,18 @@ window.MOOD = {
     opacity: 1.0,
   },
 
+  interaction: {
+    radius: 0.4, // size of the stir in scene units
+    push: 0.08, // cloud displacement from drag velocity
+    swirl: 0.08, // cloud displacement from the vortex
+    streamWake: 0.22, // how much nearby streams follow the drag
+    streamSwirl: 65, // vortex speed added to nearby streams (px/s)
+    rippleSpeed: 0.45, // how far a tap ring travels over its life
+    rippleStrength: 1.4, // brightness and distortion of the tap ring
+    lightPull: 0.16, // how far the focal light leans toward a drag
+    reducedMotionScale: 0.35,
+  },
+
   motion: {
     speed: 0.26, // 1.0 is lively; 0.2 is barely moving
     drift: 0.05, // horizontal travel of the weather

@@ -18,12 +18,16 @@ body {
 
 html {
   background: var(--night);
+  -webkit-tap-highlight-color: transparent;
 }
 
 body {
   margin: 0;
   overflow: hidden;
   overscroll-behavior: none;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
   background:
     radial-gradient(
       70% 65% at 64% 45%,
