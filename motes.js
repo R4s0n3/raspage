@@ -24,6 +24,7 @@
 
   const config = {
     streamers: settings.streamers ?? 160,
+    strays: settings.strays ?? 0,
     dust: settings.dust ?? 160,
     bokeh: settings.bokeh ?? 12,
     trailLength: settings.trailLength ?? 160,
@@ -171,7 +172,7 @@
     return pick(["light", "light", "light", "haze", "glow"]);
   };
 
-  const spawnStreamer = () => {
+  const spawnStreamer = (stray = false) => {
     const flow = pick([
       { x: 0, y: 0 },
       { x: 140, y: 90 },
@@ -185,12 +186,14 @@
       y,
       vx: 0,
       vy: 0,
-      speed: rand(0.62, 1.4),
-      size: rand(1.0, 2.3),
-      alpha: rand(0.35, 0.8),
+      speed: stray ? rand(0.26, 0.5) : rand(0.62, 1.4),
+      size: stray ? rand(0.7, 1.4) : rand(1.0, 2.3),
+      alpha: stray ? rand(0.16, 0.34) : rand(0.35, 0.8),
+      trailLength: config.trailLength * (stray ? 1.45 : 1),
       phase: rand(0, TAU),
       twinkle: rand(0.25, 0.7),
-      color: chooseColor(x, y),
+      color: stray ? pick(["haze", "haze", "light"]) : chooseColor(x, y),
+      stray,
       flow,
       history: [],
     };
@@ -224,9 +227,11 @@
 
   const fill = () => {
     const n = areaScale();
+    const total = Math.round(config.streamers * n);
+    const strayCount = Math.min(total, Math.round(config.strays * n));
     streamers = Array.from(
-      { length: Math.round(config.streamers * n) },
-      () => spawnStreamer(),
+      { length: total },
+      (_, index) => spawnStreamer(index < strayCount),
     );
     dust = Array.from(
       { length: Math.round(config.dust * n) },
@@ -266,13 +271,14 @@
     }
 
     particle.history.unshift({ x: particle.x, y: particle.y });
+    const maxLength = particle.trailLength ?? config.trailLength;
     let total = 0;
     for (let i = 1; i < particle.history.length; i += 1) {
       total += Math.hypot(
         particle.history[i - 1].x - particle.history[i].x,
         particle.history[i - 1].y - particle.history[i].y,
       );
-      if (total > config.trailLength || i >= 240) {
+      if (total > maxLength || i >= 240) {
         particle.history.length = i + 1;
         break;
       }
@@ -302,31 +308,41 @@
   };
 
   const stepStreamer = (particle, dt, time, focus) => {
-    const fieldScale = 0.00135 * config.fieldScale;
-    const angle =
-      noise(
-        (particle.x + particle.flow.x) * fieldScale,
-        (particle.y + particle.flow.y) * fieldScale,
-        time,
-      ) *
-        TAU *
-        2.1 +
-      0.35;
-
     const dx = particle.x - focus.x;
     const dy = particle.y - focus.y;
     const distance = Math.hypot(dx, dy) + 1;
-    const orbit =
-      config.orbit * Math.exp(-distance / (Math.min(width, height) * 0.8));
 
-    const targetX =
-      Math.cos(angle) * config.speed * particle.speed +
-      config.driftX +
-      (-dy / distance) * orbit;
-    const targetY =
-      Math.sin(angle) * config.speed * particle.speed +
-      config.driftY +
-      (dx / distance) * orbit;
+    let targetX;
+    let targetY;
+
+    if (particle.stray) {
+      // A stray keeps its own slow weather: it leaves the warm current and
+      // drifts outward instead of circling the light.
+      targetX = (dx / distance) * config.speed * 0.2 + config.driftX * 0.4;
+      targetY = (dy / distance) * config.speed * 0.2 + config.driftY * 0.4;
+    } else {
+      const fieldScale = 0.00135 * config.fieldScale;
+      const angle =
+        noise(
+          (particle.x + particle.flow.x) * fieldScale,
+          (particle.y + particle.flow.y) * fieldScale,
+          time,
+        ) *
+          TAU *
+          2.1 +
+        0.35;
+      const orbit =
+        config.orbit * Math.exp(-distance / (Math.min(width, height) * 0.8));
+
+      targetX =
+        Math.cos(angle) * config.speed * particle.speed +
+        config.driftX +
+        (-dy / distance) * orbit;
+      targetY =
+        Math.sin(angle) * config.speed * particle.speed +
+        config.driftY +
+        (dx / distance) * orbit;
+    }
 
     const inertia = Math.min(1, dt * 2.4);
     particle.vx += (targetX - particle.vx) * inertia;

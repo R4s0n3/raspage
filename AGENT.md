@@ -162,9 +162,11 @@ The page loads four classic scripts in this order: `mood.js`, `shader.js`,
   focal light opens a clearing in the weather; grain and vignette finish it.
 - **Pulse (`motes.js`)** — a transparent 2D canvas above the atmosphere. Light
   streams follow a slow noise field and curl around the focal point, leaving
-  trails. Static dust and soft bokeh sit around them. Counts scale down on small
-  screens. Each stream keeps a pixel-length history so trails look consistent
-  across refresh rates, and the scene is warmed up before the first frame.
+  trails. A small number can be `strays`, which keep a slower outward path
+  instead. Static dust and soft bokeh sit around them. Counts scale down on
+  small screens. Each stream keeps a pixel-length history so trails look
+  consistent across refresh rates, and the scene is warmed up before the first
+  frame.
 
 Both layers pause when the tab is hidden and resume without a time jump.
 
@@ -220,6 +222,7 @@ The 2D layer is the pulse. This is where a day most clearly shows its tempo.
 | Field | Range (comfortable) | Effect |
 | --- | --- | --- |
 | `streamers` | `40–300` | number of long light trails before mobile scaling |
+| `strays` | `0–40` | streams that leave the main current: slower, cooler, longer trails drifting outward; `0` keeps the old look |
 | `dust` | `0–300` | tiny suspended points |
 | `bokeh` | `0–30` | large, soft out-of-focus orbs |
 | `trailLength` | `40–260` px | how much memory each stream carries |

@@ -7,7 +7,8 @@ slow clouds and drifting streams of light. Each day it is reshaped by a short,
 diary-like prompt: a mood, a day, a thought. The animation changes; the diary
 stays private.
 
-**Current mood:** *Threshold* — a quiet, wide dusk.
+**Current mood:** *Unfinished Gold* — a high, open gold with cool air and a
+few trails drifting past.
 
 ## Run it
 

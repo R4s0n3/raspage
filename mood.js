@@ -6,62 +6,63 @@
  * See AGENT.md for the full field guide.
  */
 window.MOOD = {
-  title: "Threshold",
+  title: "Unfinished Gold",
   date: "2026-10-20",
   description:
-    "A quiet, wide dusk. Cool air, a low amber light, and the feeling of standing at the beginning of something.",
+    "A high, open gold. Quick light lifts through cool air and gathers around a warm centre, while a few long trails drift quietly past the edge.",
 
   palette: {
-    night: "#04060d", // the darkest air, the edges of the room
-    deep: "#0b1a2c", // the main body of the sky
-    haze: "#3a626c", // drifting weather, the far distance
-    light: "#d3dfdb", // lit edges, dust, a pale place in the clouds
-    glow: "#ffd0a0", // the hidden light, the warm point of feeling
+    night: "#05070b", // the darkest air, the edges of the room
+    deep: "#16202c", // the main body of the sky
+    haze: "#5c736f", // drifting weather, the cool distance
+    light: "#f4e3c2", // lit edges, dust, warm parchment
+    glow: "#ffb25e", // the hidden light, the point of celebration
   },
 
   composition: {
-    cloudCover: 0.54, // 0 = clear, 1 = heavy weather
-    cloudScale: 1.52, // size of the moving cloud forms
-    turbulence: 1.15, // how much the clouds curl and tear
-    lightX: 0.65,
-    lightY: 0.435,
-    lightRadius: 0.4,
-    lightIntensity: 0.78,
-    rays: 0.22,
+    cloudCover: 0.4, // 0 = clear, 1 = heavy weather
+    cloudScale: 1.2, // size of the moving cloud forms
+    turbulence: 0.9, // how much the clouds curl and tear
+    lightX: 0.57,
+    lightY: 0.35,
+    lightRadius: 0.5,
+    lightIntensity: 0.9,
+    rays: 0.26,
   },
 
   atmosphere: {
-    grain: 0.03,
-    vignette: 0.4,
-    motes: 0.18,
-    stars: 0.1,
+    grain: 0.028,
+    vignette: 0.34,
+    motes: 0.22,
+    stars: 0.05,
     rain: 0.0,
   },
 
   motes: {
-    streamers: 140,
-    dust: 150,
-    bokeh: 12,
-    trailLength: 150,
-    speed: 54,
-    orbit: 11,
-    driftX: 3,
-    driftY: -2,
-    fieldScale: 1,
-    opacity: 0.95,
+    streamers: 185,
+    strays: 9,
+    dust: 180,
+    bokeh: 16,
+    trailLength: 190,
+    speed: 62,
+    orbit: 14,
+    driftX: 4.5,
+    driftY: -3.5,
+    fieldScale: 0.94,
+    opacity: 1.0,
   },
 
   motion: {
-    speed: 0.24, // 1.0 is lively; 0.2 is barely moving
-    drift: 0.04, // horizontal travel of the weather
-    parallax: 0.5, // how much the light follows the pointer (0 = off)
+    speed: 0.26, // 1.0 is lively; 0.2 is barely moving
+    drift: 0.05, // horizontal travel of the weather
+    parallax: 0.55, // how much the light follows the pointer (0 = off)
     reducedMotionScale: 0.16,
   },
 
   grade: {
-    contrast: 1.04,
-    saturation: 0.92,
-    exposure: 1.0,
+    contrast: 1.03,
+    saturation: 0.95,
+    exposure: 1.06,
   },
 
   quality: {
