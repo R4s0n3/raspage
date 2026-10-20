@@ -1,0 +1,141 @@
+:root {
+  color-scheme: dark;
+  --night: #04060d;
+  --deep: #0b1a2c;
+  --haze: #3a626c;
+  --light: #d3dfdb;
+  --glow: #ffd0a0;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  height: 100%;
+}
+
+html {
+  background: var(--night);
+}
+
+body {
+  margin: 0;
+  overflow: hidden;
+  overscroll-behavior: none;
+  background:
+    radial-gradient(
+      70% 65% at 64% 45%,
+      color-mix(in srgb, var(--glow) 30%, transparent) 0%,
+      transparent 68%
+    ),
+    radial-gradient(
+      120% 100% at 34% 78%,
+      color-mix(in srgb, var(--haze) 65%, transparent) 0%,
+      transparent 72%
+    ),
+    linear-gradient(180deg, var(--night) 0%, var(--deep) 62%, var(--night) 100%);
+}
+
+.stage,
+#scene,
+#motes {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.stage {
+  isolation: isolate;
+  background: transparent;
+}
+
+#scene,
+#motes {
+  display: block;
+  background: transparent;
+  touch-action: none;
+}
+
+#motes {
+  pointer-events: none;
+}
+
+.veil {
+  position: fixed;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
+  background:
+    radial-gradient(
+      120% 96% at 50% 47%,
+      transparent 42%,
+      rgba(2, 4, 9, 0.3) 76%,
+      rgba(2, 4, 9, 0.62) 100%
+    ),
+    linear-gradient(
+      180deg,
+      rgba(2, 4, 9, 0.18) 0%,
+      transparent 18%,
+      transparent 80%,
+      rgba(2, 4, 9, 0.26) 100%
+    );
+}
+
+.veil::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  opacity: 0.035;
+  mix-blend-mode: soft-light;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='180' height='180'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.86' numOctaves='3' stitchTiles='stitch'/></filter><rect width='100%25' height='100%25' filter='url(%23n)' opacity='.8'/></svg>");
+  background-size: 180px 180px;
+}
+
+/* If WebGL is unavailable, keep the page alive with a slow CSS atmosphere. */
+.no-webgl #scene {
+  display: none;
+}
+
+.no-webgl body {
+  background-size:
+    160% 160%,
+    180% 180%,
+    100% 100%;
+  animation: drift 38s ease-in-out infinite alternate;
+}
+
+@keyframes drift {
+  from {
+    background-position:
+      42% 46%,
+      32% 68%,
+      center;
+  }
+  to {
+    background-position:
+      68% 54%,
+      58% 74%,
+      center;
+  }
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .no-webgl body {
+    animation-duration: 160s;
+  }
+}
