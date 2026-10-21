@@ -22,7 +22,8 @@ const page = async (path) => { const r = await fetch(BASE + path); return { stat
   check("unknown invite page is 404", p.status === 404 && p.text.includes("expired"));
 
   p = await page("/privacy");
-  check("privacy page", p.status === 200 && p.type.startsWith("text/html") && p.text.includes("What stays on your phone") && p.text.includes("hello@example.com"));
+  check("privacy page", p.status === 200 && p.type.startsWith("text/html") && p.text.includes("What stays on your phone") && p.text.includes("Your rights"));
+  check("privacy page names the controller", p.text.includes("Ada Example<br>Examplestreet 1<br>12345 Exampletown<br>Germany") && p.text.includes("mailto:hello@example.com"));
   check("privacy source is not served raw", (await page("/server/privacy.html")).status === 404);
 
   p = await page("/.well-known/apple-app-site-association");

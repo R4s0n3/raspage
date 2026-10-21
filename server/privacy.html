@@ -3,19 +3,29 @@
 
 <p>moodpage is a private diary whose pages are weather. It is built so that
 your words stay yours: only weather is ever shared, and only with people you
-choose.</p>
+choose. This page explains exactly what happens with your data.</p>
+
+<h2>Who is responsible</h2>
+<!--CONTROLLER-->
 
 <h2>What stays on your phone</h2>
 <p>Your diary entries and your past days are stored only on your phone. They
-are not uploaded, backed up, or synced by moodpage.</p>
+are not uploaded, backed up, or synced by moodpage. Deleting the app deletes
+them.</p>
 
 <h2>Turning an entry into weather</h2>
 <p>When you choose “Make the weather”, the entry is sent once, over an
-encrypted connection, to the moodpage server, which passes it to an AI model
-through OpenRouter to be translated into weather. The request is only routed
-to model providers that do not keep or train on what they are sent. The
-moodpage server does not store or log the entry; it returns the weather and
-forgets the words.</p>
+encrypted connection, to the moodpage server. The server passes it to an AI
+model through <strong>OpenRouter</strong> (OpenRouter, Inc., United States)
+to be translated into weather, and returns only the weather. Requests are
+only routed to model providers that do not store or train on what they are
+sent. The moodpage server does not store or log the entry.</p>
+<p>Because a diary can say something about your health or private life, we
+only send an entry when you ask for it, by choosing “Make the weather”
+(Art. 9(2)(a) and Art. 6(1)(a) GDPR). You can stop at any time by not using
+it; the rest of the app keeps working. OpenRouter and the model providers
+may process the entry in the United States; the transfer relies on the
+safeguards these providers offer for international transfers.</p>
 
 <h2>Your account</h2>
 <p>To share weather with friends, the app creates an account for you. There
@@ -26,24 +36,45 @@ is no email, phone number, or password. The server keeps only:</p>
   <li>the name you choose for your friends to see;</li>
   <li>who your friends are, and the invites you have made (an invite expires
   after seven days, or when it is used);</li>
-  <li>your latest weather and its date (never the entry it came from).</li>
+  <li>your latest weather and its date (never the entry it came from);</li>
+  <li>touches you leave in a friend's water while they are away (“stones”),
+  until your friend's app collects them, at most seven days.</li>
 </ul>
 <p>Nobody can search for you. Only your friends can see your name and your
-latest weather.</p>
+latest weather. This is needed to provide the friends features you choose
+to use (Art. 6(1)(b) GDPR). Account data is kept until you delete your
+account.</p>
 
 <h2>Drawing together</h2>
 <p>When you and a friend are in the same water, the touches you draw are
-relayed between your phones as positions on the screen. They are not stored.</p>
+relayed between your phones as positions on the screen, and are not stored.</p>
+
+<h2>Security and abuse prevention</h2>
+<p>To protect the service, the server counts requests per account or network
+address for one hour at a time; only the counts are kept, then forgotten.
+The server's hosting may keep short-lived technical access logs (such as IP
+address, time and requested address) to keep the service secure. This is
+based on our legitimate interest in a secure, working service (Art. 6(1)(f)
+GDPR).</p>
 
 <h2>What is not collected</h2>
-<p>No advertising, no analytics, no tracking across apps or websites, and no
-sale or sharing of data with anyone. To prevent abuse, the server counts
-requests per account or network address for an hour at a time; only the
-counts are kept, and they are then forgotten.</p>
+<p>No advertising, no analytics, no cookies, no tracking across apps or
+websites, and no sale of data. The app and this website are not directed at
+children under 16.</p>
 
 <h2>Deleting your data</h2>
 <p>In the app, Friends → “Delete my account” removes your account, name,
-friendships, invites, and shared weather from the server immediately. Your
-diary stays on your phone until you delete the app.</p>
+friendships, invites, stones and shared weather from the server
+immediately. Your diary stays on your phone until you delete the app.</p>
 
-<!--CONTACT-->
+<h2>Your rights</h2>
+<p>Under the GDPR you have the right to access your data, to have it
+corrected or deleted, to restrict or object to its processing, to receive
+it in a portable form, and to withdraw consent at any time with effect for
+the future. Most of this you can do in the app directly; otherwise contact
+us at the address above. You also have the right to lodge a complaint with
+a data protection supervisory authority.</p>
+
+<h2>Changes</h2>
+<p>If this policy changes, the new version is published here with a new
+date.</p>

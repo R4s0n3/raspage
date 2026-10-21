@@ -35,6 +35,8 @@ const runFile = (file, env) =>
     APPLE_TEAM_ID: "ABCDE12345",
     ANDROID_CERT_SHA256: "",
     APP_INSTALL_URL: "https://testflight.apple.com/join/TEST",
+    MOODPAGE_OPERATOR: "Ada Example",
+    MOODPAGE_ADDRESS: "Examplestreet 1, 12345 Exampletown, Germany",
     MOODPAGE_CONTACT: "hello@example.com",
   };
   const server = spawn(process.execPath, [path.join(__dirname, "..", "server.js")], { env, stdio: ["ignore", "pipe", "inherit"] });

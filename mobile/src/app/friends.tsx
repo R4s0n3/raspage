@@ -71,6 +71,11 @@ const confirm = (title: string, message: string, action: string, onConfirm: () =
   ]);
 };
 
+// The privacy policy lives on the server's own domain.
+const openPrivacy = () => {
+  Linking.openURL(`${API}/privacy`).catch(() => {});
+};
+
 export default function Friends() {
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
@@ -223,6 +228,9 @@ export default function Friends() {
             >
               <Text style={[styles.leaveText, { color: palette.light }]}>I have a recovery code</Text>
             </Pressable>
+            <Pressable accessibilityRole="link" onPress={openPrivacy} style={styles.leave}>
+              <Text style={[styles.leaveText, { color: palette.light }]}>Privacy</Text>
+            </Pressable>
           </View>
         )}
 
@@ -298,6 +306,9 @@ export default function Friends() {
               </Pressable>
               <Pressable accessibilityRole="button" onPress={leave} style={styles.leave}>
                 <Text style={[styles.leaveText, { color: palette.light }]}>Delete my account</Text>
+              </Pressable>
+              <Pressable accessibilityRole="link" onPress={openPrivacy} style={styles.leave}>
+                <Text style={[styles.leaveText, { color: palette.light }]}>Privacy</Text>
               </Pressable>
             </View>
           </>

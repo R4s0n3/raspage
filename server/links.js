@@ -26,6 +26,10 @@ const CERTS = (process.env.ANDROID_CERT_SHA256 || "")
   .filter(Boolean);
 // Where to get the app (a TestFlight or store link), shown on invite pages.
 const INSTALL_URL = (process.env.APP_INSTALL_URL || "").trim();
+// Who is responsible for the service, for the privacy policy. Set on the
+// server (Coolify), so personal details stay out of the public repository.
+const OPERATOR = (process.env.MOODPAGE_OPERATOR || "").trim();
+const ADDRESS = (process.env.MOODPAGE_ADDRESS || "").trim();
 const CONTACT = (process.env.MOODPAGE_CONTACT || "").trim();
 
 const escape = (value) =>
@@ -104,6 +108,18 @@ const notFound = (response) => {
 
 const PRIVACY = fs.readFileSync(path.join(__dirname, "privacy.html"), "utf8");
 
+// The controller under the GDPR: name, postal address (one line per comma
+// or newline), and an email address.
+const controller = () => {
+  if (!OPERATOR || !CONTACT) {
+    return `<p><em>The operator's name and contact address have not been set on
+      this server yet (MOODPAGE_OPERATOR, MOODPAGE_ADDRESS, MOODPAGE_CONTACT).</em></p>`;
+  }
+  const lines = [OPERATOR, ...ADDRESS.split(/\s*(?:\n|\\n|,)\s*/).filter(Boolean)].map(escape);
+  return `<p>${lines.join("<br>")}<br>
+    <a href="mailto:${escape(CONTACT)}">${escape(CONTACT)}</a></p>`;
+};
+
 const createLinks = ({ db }) => {
   const invitePage = async (response, raw) => {
     const code = cleanCode(raw);
@@ -163,12 +179,7 @@ const createLinks = ({ db }) => {
         200,
         page(
           "moodpage · privacy",
-          PRIVACY.replace(
-            "<!--CONTACT-->",
-            CONTACT
-              ? `<h2>Contact</h2><p>Questions or requests: <a href="mailto:${escape(CONTACT)}">${escape(CONTACT)}</a></p>`
-              : "",
-          ),
+          PRIVACY.replace("<!--CONTROLLER-->", controller()),
         ),
       );
       return true;
