@@ -164,10 +164,10 @@ moodpage.js         MOODPAGE.create(): one moodpage in one element
 main.js             the site: today's mood, full screen, title, room
 examples/embed.html developer page: two moodpages, setMood/pause/destroy
 server.js           Node app: static site + room relay + /api/mood
-translate.js        diary entry → mood with Claude, for the app
+translate.js        diary entry → mood with Claude via OpenRouter, for the app
 mood-schema.js      every translatable field and its range; clamps moods
 mobile/             the Expo app (its own README)
-package.json        the server's dependencies (`ws`, `@anthropic-ai/sdk`)
+package.json        the server's only dependency (`ws`)
 favicon.svg         small static mark
 journal/            one atmospheric log per day
 AGENT.md            this file

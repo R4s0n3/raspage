@@ -35,16 +35,17 @@ reloads. A change to the engine reaches the app on the next `npm start`.
 
 The diary lives only on the device. To make the weather, the entry is sent
 once to the moodpage server (`server.js`, `POST /api/mood`), which asks Claude
-to translate it with AGENT.md's own field guide and returns only the mood. The
-server stores and logs nothing.
+through OpenRouter to translate it with AGENT.md's own field guide and returns
+only the mood. Requests are only routed to providers that do not keep or train
+on them, and the server stores and logs nothing.
 
 ## Run it
 
-The server, from the repository root, with Claude credentials:
+The server, from the repository root, with an OpenRouter key:
 
 ```bash
 npm install
-ANTHROPIC_API_KEY=... npm start        # http://localhost:8787
+OPENROUTER_API_KEY=... npm start       # http://localhost:8787
 ```
 
 The app:

@@ -33,11 +33,8 @@ const MESSAGE_LIMIT = 120; // messages per second, per client
 const STATIC_ROOT = path.resolve(__dirname);
 
 // POST /api/mood: a diary entry in, a mood out (translate.js). Off unless
-// Claude credentials are configured. MOODPAGE_APP_TOKEN, when set, is a
-// shared secret the app must send as a bearer token.
-const TRANSLATE_ENABLED = Boolean(
-  process.env.ANTHROPIC_API_KEY || process.env.ANTHROPIC_AUTH_TOKEN,
-);
+// OPENROUTER_API_KEY is set. MOODPAGE_APP_TOKEN, when set, is a shared
+// secret the app must send as a bearer token.
 const APP_TOKEN = process.env.MOODPAGE_APP_TOKEN || "";
 const TRANSLATIONS_PER_HOUR = Number(process.env.TRANSLATIONS_PER_HOUR) || 20;
 const translator = createTranslator({ root: STATIC_ROOT });
@@ -281,7 +278,7 @@ const serveMood = async (request, response) => {
     sendJson(response, 405, { error: "POST a diary entry" });
     return;
   }
-  if (!TRANSLATE_ENABLED) {
+  if (!translator.enabled) {
     sendJson(response, 503, { error: "translation is not configured" });
     return;
   }

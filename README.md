@@ -92,7 +92,7 @@ moodpage.js         MOODPAGE.create(): one moodpage in any element
 main.js             the site: today's mood, full screen
 examples/           a developer page with two moodpages side by side
 server.js           Node app: static site, room relay, /api/mood
-translate.js        diary entry → mood, with Claude (for the app)
+translate.js        diary entry → mood, with Claude via OpenRouter (for the app)
 mood-schema.js      the mood's fields and ranges; keeps any mood in range
 mobile/             the Expo app: a private diary of moodpages
 package.json        the relay's only dependency (`ws`)
@@ -138,9 +138,10 @@ is one of these, made by `main.js` and kept on `window.moodpage`.
 
 [`mobile/`](mobile/) is an Expo app built on the same engine: a private diary
 where each day becomes weather. The words stay on the phone; the server's
-`POST /api/mood` turns an entry into a mood with Claude, using this
+`POST /api/mood` turns an entry into a mood with Claude (through OpenRouter), using this
 repository's AGENT.md as its field guide, and keeps nothing. It is off unless
-`ANTHROPIC_API_KEY` is set. See [`mobile/README.md`](mobile/README.md).
+`OPENROUTER_API_KEY` is set (`MOODPAGE_MODEL` picks another OpenRouter model;
+the default is `anthropic/claude-opus-5.5`). See [`mobile/README.md`](mobile/README.md).
 
 ## Publishing
 
@@ -176,6 +177,7 @@ other person in the room and stores nothing. It does not record names, room
 history, or drawing content.
 
 The app's `POST /api/mood` holds a diary entry only for the length of the
-request: it is sent to Claude to be translated, never logged or written
+request: it is sent through OpenRouter to Claude to be translated, never
+logged or written
 anywhere, and only the resulting mood is returned. Requests are rate-limited
 per address; only the counts are kept, for an hour.

@@ -2,9 +2,9 @@
  * Diary in, weather out.
  *
  * The same translation the daily ritual does by hand (AGENT.md), as one
- * Claude call: a private diary entry becomes a mood object in the shape of
- * mood.js. The entry is used once to make the weather and never stored or
- * logged here; only the mood goes back.
+ * Claude call through OpenRouter: a private diary entry becomes a mood object
+ * in the shape of mood.js. The entry is used once to make the weather and
+ * never stored or logged here; only the mood goes back.
  *
  * The instructions are AGENT.md's own sections, read at start-up, so the
  * guide stays the single source of truth. They are long and never change
@@ -15,10 +15,10 @@
 const fs = require("fs");
 const path = require("path");
 const vm = require("vm");
-const { Anthropic } = require("@anthropic-ai/sdk");
 const { moodJsonSchema, clampMood } = require("./mood-schema");
 
-const MODEL = process.env.MOODPAGE_MODEL || "claude-opus-5-5";
+const ENDPOINT = "https://openrouter.ai/api/v1/chat/completions";
+const MODEL = process.env.MOODPAGE_MODEL || "anthropic/claude-opus-5.5";
 const MAX_ENTRY = 6000;
 
 // The base mood: mood.js as the page loads it. It supplies every field the
@@ -84,38 +84,71 @@ class TranslationError extends Error {
   }
 }
 
-const createTranslator = ({ root, client } = {}) => {
+// One chat completion from OpenRouter. Only the HTTP status and OpenRouter's
+// error code are ever reported, never the request.
+const openRouter = (apiKey) => async (body) => {
+  const response = await fetch(ENDPOINT, {
+    method: "POST",
+    headers: {
+      authorization: "Bearer " + apiKey,
+      "content-type": "application/json",
+      "x-title": "moodpage",
+    },
+    body: JSON.stringify(body),
+  });
+  const data = await response.json().catch(() => null);
+  if (!response.ok || data?.error) {
+    const status = data?.error?.code || response.status;
+    console.error("openrouter error:", status);
+    throw new TranslationError(
+      status === 429 ? "the weather is busy, try again soon" : "the weather could not be made",
+      status === 429 ? 503 : 502,
+    );
+  }
+  return data;
+};
+
+const createTranslator = ({ root, complete } = {}) => {
   const base = loadBaseMood(root);
   const instructions = buildInstructions(root, base);
   const schema = moodJsonSchema();
-  let anthropic = client || null;
+  const send =
+    complete || (process.env.OPENROUTER_API_KEY ? openRouter(process.env.OPENROUTER_API_KEY) : null);
 
   const translate = async (entry, date) => {
     const words = String(entry || "").trim().slice(0, MAX_ENTRY);
     if (!words) {
       throw new TranslationError("empty entry", 400);
     }
-    // Credentials come from the environment (ANTHROPIC_API_KEY and friends).
-    anthropic = anthropic || new Anthropic();
+    if (!send) {
+      throw new TranslationError("translation is not configured", 503);
+    }
 
-    const response = await anthropic.beta.messages.create({
+    const data = await send({
       model: MODEL,
       max_tokens: 16000,
-      // A declined request is re-run on a fallback model in the same call.
-      betas: ["server-side-fallback-2026-07-01"],
-      fallbacks: "default",
-      output_config: {
-        effort: "medium",
-        format: { type: "json_schema", schema },
+      reasoning: { effort: "medium", exclude: true },
+      response_format: {
+        type: "json_schema",
+        json_schema: { name: "mood", strict: true, schema },
       },
-      system: [
-        {
-          type: "text",
-          text: instructions,
-          cache_control: { type: "ephemeral" },
-        },
-      ],
+      provider: {
+        // Only providers that honour the schema, and none that keep or
+        // train on what they are sent.
+        require_parameters: true,
+        data_collection: "deny",
+      },
       messages: [
+        {
+          role: "system",
+          content: [
+            {
+              type: "text",
+              text: instructions,
+              cache_control: { type: "ephemeral" },
+            },
+          ],
+        },
         {
           role: "user",
           content:
@@ -128,24 +161,24 @@ const createTranslator = ({ root, client } = {}) => {
       ],
     });
 
-    if (response.stop_reason === "refusal") {
+    const choice = data?.choices?.[0];
+    if (choice?.finish_reason === "content_filter") {
       throw new TranslationError("the entry could not be translated", 422);
     }
-    if (response.stop_reason === "max_tokens") {
+    if (choice?.finish_reason === "length") {
       throw new TranslationError("the weather came back incomplete");
     }
 
-    const block = response.content.find((part) => part.type === "text");
     let raw = null;
     try {
-      raw = JSON.parse(block?.text || "");
+      raw = JSON.parse(choice?.message?.content || "");
     } catch {
       throw new TranslationError("the weather came back unreadable");
     }
     return clampMood(raw, base, date);
   };
 
-  return { translate, base };
+  return { translate, base, enabled: Boolean(send) };
 };
 
 module.exports = { createTranslator, TranslationError, MAX_ENTRY };
