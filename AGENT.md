@@ -559,6 +559,12 @@ coordinates, so the same gesture lands in the same relative place on different
 screens. Do not add names, chat, or persistent room state without revisiting
 the privacy and no-UI rules.
 
+The app adds one kind of private room: `home:<account id>`, joined with
+`{ t: "join", visit, token }`. The relay checks the account against the
+database and lets in only that person and their friends. The website never
+uses it, and the page stays wordless: names and friends live only in the app
+(`server/accounts.js`, `mobile/`).
+
 ### Performance
 
 Target 60 fps on an ordinary laptop, 30 fps minimum on a phone. If a change is

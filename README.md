@@ -61,8 +61,11 @@ same origin. On Coolify (nixpacks), point a service at this repository's root:
 - Ports exposes: `8787`
 - Health check: `GET /health`
 - Domains: the domain you serve the page from
-
-- Environment: `OPENROUTER_API_KEY` to turn on the app's translator
+- Environment:
+  - `OPENROUTER_API_KEY` turns on the app's translator
+  - `DATABASE_URL` turns on the app's accounts and friends: add a PostgreSQL
+    resource in the same Coolify project and use its internal connection
+    URL. The server creates and updates its tables on start.
 
 Coolify/Traefik terminates TLS; `server/server.js` reads `x-forwarded-proto` and serves
 the page with `wss://<same domain>` in its meta tag, so the published page talks
@@ -186,6 +189,13 @@ history, or drawing content.
 
 The app's `POST /api/mood` holds a diary entry only for the length of the
 request: it is sent through OpenRouter to Claude to be translated, never
-logged or written
-anywhere, and only the resulting mood is returned. Requests are rate-limited
-per address; only the counts are kept, for an hour.
+logged or written anywhere, and only the resulting mood is returned.
+Requests are rate-limited per account (or address); only the counts are
+kept, for an hour.
+
+With a database, the server keeps the app's accounts: the hash of each
+account's secret key, the name a person chooses for their friends, their
+friendships and open invites, and their latest mood (never an entry). There
+is no email, password, or search. `DELETE /api/me` removes all of it.
+Visiting a friend's water only lets in that friend and their friends; the
+relay still stores nothing.

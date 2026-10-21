@@ -4,7 +4,9 @@ A private diary whose pages are weather. Write how the day felt; the words
 stay on the phone, and the day becomes a living moodpage. Past days are kept
 as a calendar of small skies, and each one can be opened and lived in again.
 
-This is the single-player app: no accounts and no friends yet.
+Friends share weather, never words: each sees the other's latest weather,
+and visiting a friend's page puts you both in the same water, each drawing in
+your own colour.
 
 ## How it fits together
 
@@ -14,13 +16,20 @@ src/app/              screens (Expo Router)
   write.tsx           write the day; it is turned into weather
   days.tsx            a month of days, each as its weather
   day/[date].tsx      one day again, and your words if you ask
+  friends.tsx         your friends' weather, invites, your name, delete account
+  friend/[id].tsx     a friend's water, alive, drawn in together
+  invite/[code].tsx   an invite link, opened
 src/components/
   MoodView.tsx        the engine in a WebView (MoodView.web.tsx: an iframe)
   Swatch.tsx          a day's weather in a few pixels
   Pill.tsx            the one kind of button
+  NameForm.tsx        the name your friends see
 src/lib/
   diary.ts            the diary on the device: SQLite (diary.web.ts: localStorage)
-  api.ts              the one network call: an entry to POST /api/mood
+  api.ts              the one call that carries words: an entry to POST /api/mood
+  server.ts           where the server is, and how to talk to it
+  account.ts          your account: a secret key in the keychain
+  friends.ts          friends, invites, sharing your weather
 src/engine/
   host.js             the bridge inside the WebView: mood, pause, resume
 scripts/
@@ -32,6 +41,12 @@ The weather is the same engine as the website, from the repository root
 (`moodpage.js` and friends), bundled inline so it runs offline. The app passes
 it a mood and later sends new ones in; the sky changes in place and never
 reloads. A change to the engine reaches the app on the next `npm start`.
+
+Accounts need no email or password: the app makes a secret key on first use
+and keeps it in the keychain; the server stores only its hash, the name you
+choose, your friendships, and your latest weather. Friends find each other
+with invite codes, never by searching. Without a database on the server
+(`DATABASE_URL`), the app simply works alone.
 
 The diary lives only on the device. To make the weather, the entry is sent
 once to the moodpage server (`server/`, `POST /api/mood`), which asks Claude
