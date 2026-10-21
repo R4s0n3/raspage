@@ -140,7 +140,8 @@ is one of these, made by `main.js` and kept on `window.moodpage`.
 where each day becomes weather. The words stay on the phone; the server's
 `POST /api/mood` turns an entry into a mood with Claude (through OpenRouter), using this
 repository's AGENT.md as its field guide, and keeps nothing. It is off unless
-`OPENROUTER_API_KEY` is set (`MOODPAGE_MODEL` picks another OpenRouter model;
+`OPENROUTER_API_KEY` is set, in the environment or a `.env` next to
+`server.js` (see `.env.example`; dotfiles are never served) (`MOODPAGE_MODEL` picks another OpenRouter model;
 the default is `anthropic/claude-opus-5.5`). See [`mobile/README.md`](mobile/README.md).
 
 ## Publishing

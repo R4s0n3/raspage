@@ -25,6 +25,14 @@ const crypto = require("crypto");
 const { WebSocketServer, WebSocket } = require("ws");
 const { createTranslator, TranslationError, MAX_ENTRY } = require("./translate");
 
+// Secrets for local runs can live in a .env next to this file (never
+// committed, never served). Variables already set, e.g. by Coolify, win.
+try {
+  process.loadEnvFile(path.join(__dirname, ".env"));
+} catch {
+  // No .env: the environment is all there is.
+}
+
 const PORT = Number(process.env.PORT) || 8787;
 const MAX_PER_ROOM = Math.max(2, Number(process.env.MAX_PER_ROOM) || 5);
 const MAX_ROOMS = 400;
@@ -208,9 +216,11 @@ const serveStatic = (request, response) => {
   const segments = filePath.split(path.sep);
 
   // Never serve the diary's private drawer, the repository itself, its
-  // dependencies, or the app's source.
+  // dependencies, the app's source, or any dotfile (.env holds secrets).
+  const relative = path.relative(STATIC_ROOT, filePath).split(path.sep);
   if (
     !insideRoot ||
+    relative.some((segment) => segment.startsWith(".")) ||
     segments.includes("private") ||
     segments.includes(".git") ||
     segments.includes("node_modules") ||

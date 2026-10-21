@@ -41,27 +41,31 @@ on them, and the server stores and logs nothing.
 
 ## Run it
 
-The server, from the repository root, with an OpenRouter key:
+The server, from the repository root. Put the OpenRouter key in a `.env`
+there (copy `.env.example`); it is never committed and never served:
 
 ```bash
 npm install
-OPENROUTER_API_KEY=... npm start       # http://localhost:8787
+cp .env.example .env                   # then fill in OPENROUTER_API_KEY
+npm start                              # http://localhost:8787
 ```
 
-The app:
+The app, with its own `.env` (copy `mobile/.env.example`):
 
 ```bash
 cd mobile
 npm install
+cp .env.example .env                   # where the server is
 npm start                              # then press i, a, or w
 ```
 
-`EXPO_PUBLIC_MOODPAGE_API` points the app at a server (default
-`http://localhost:8787`; a phone on the same network needs your computer's
-address, e.g. `http://192.168.1.5:8787`). If the server sets
-`MOODPAGE_APP_TOKEN`, give the app the same value as
-`EXPO_PUBLIC_MOODPAGE_TOKEN`; it is a speed bump against strangers, not a
-secret, since anything in an app can be read out of it.
+`mobile/.env` holds only `EXPO_PUBLIC_` settings, and Expo builds those into
+the app, where anyone can read them: never put the OpenRouter key there.
+`EXPO_PUBLIC_MOODPAGE_API` is the server (default `http://localhost:8787`; a
+phone on the same network needs your computer's address, e.g.
+`http://192.168.1.5:8787`). If the server sets `MOODPAGE_APP_TOKEN`, give the
+app the same value as `EXPO_PUBLIC_MOODPAGE_TOKEN`; it is a speed bump
+against strangers, not a secret.
 
 The web build (`w`) is for development: it runs the engine in an iframe and
 keeps the diary in localStorage.
