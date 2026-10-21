@@ -2,15 +2,21 @@
   "name": "moodpage-server",
   "version": "1.0.0",
   "private": true,
-  "description": "moodpage: serves the site, its shared rooms, and the diary translator",
+  "description": "moodpage: serves the site, its shared rooms, friends, and the diary translator",
   "main": "server.js",
   "scripts": {
-    "start": "node server.js"
+    "start": "node server.js",
+    "db:dev": "pglite-server --db=.pglite --port=5433 --max-connections=10"
   },
   "engines": {
     "node": ">=20.12"
   },
   "dependencies": {
+    "pg": "^8.23.1",
     "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "@electric-sql/pglite": "^0.5.11",
+    "@electric-sql/pglite-socket": "^0.2.14"
   }
 }

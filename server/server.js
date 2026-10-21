@@ -27,6 +27,18 @@ const path = require("path");
 const crypto = require("crypto");
 const { WebSocketServer, WebSocket } = require("ws");
 const { createTranslator, TranslationError, MAX_ENTRY } = require("./translate");
+const { clampMood } = require("./mood-schema");
+const { createDb } = require("./db");
+const { createAccounts } = require("./accounts");
+const {
+  HttpError,
+  sendJson,
+  sendPreflight,
+  readJson,
+  clientAddress,
+  bearer,
+  limiter,
+} = require("./http");
 
 // Secrets for local runs can live in server/.env (never committed, never
 // served). Variables already set, e.g. by Coolify, win.
@@ -45,11 +57,18 @@ const MESSAGE_LIMIT = 120; // messages per second, per client
 const STATIC_ROOT = path.resolve(__dirname, "..");
 
 // POST /api/mood: a diary entry in, a mood out (translate.js). Off unless
-// OPENROUTER_API_KEY is set. MOODPAGE_APP_TOKEN, when set, is a shared
-// secret the app must send as a bearer token.
+// OPENROUTER_API_KEY is set. With a database it needs an account; without
+// one, MOODPAGE_APP_TOKEN (when set) is a shared secret the app must send.
 const APP_TOKEN = process.env.MOODPAGE_APP_TOKEN || "";
 const TRANSLATIONS_PER_HOUR = Number(process.env.TRANSLATIONS_PER_HOUR) || 20;
 const translator = createTranslator({ root: STATIC_ROOT });
+
+// Accounts, friends and visits need Postgres (DATABASE_URL). Without it the
+// server is what it was: the site, open rooms, and the translator.
+const db = process.env.DATABASE_URL ? createDb(process.env.DATABASE_URL) : null;
+const accounts = db
+  ? createAccounts({ db, clampMood, base: translator.base })
+  : null;
 const INDEX_META =
   /(<meta\s+name="moodpage-ws"\s+content=")([^"]*)(")/i;
 
@@ -244,68 +263,31 @@ const serveStatic = (request, response) => {
   });
 };
 
-// Translations per address in the current hour. Only counts are kept.
-const translationCounts = new Map();
-setInterval(() => translationCounts.clear(), 60 * 60 * 1000).unref();
-
-const sendJson = (response, status, body) => {
-  const payload = JSON.stringify(body);
-  response.writeHead(status, {
-    "content-type": "application/json; charset=utf-8",
-    "content-length": Buffer.byteLength(payload),
-    "cache-control": "no-store",
-    "access-control-allow-origin": "*",
-  });
-  response.end(payload);
-};
-
-const readBody = (request, limit) =>
-  new Promise((resolve, reject) => {
-    let size = 0;
-    const chunks = [];
-    request.on("data", (chunk) => {
-      size += chunk.length;
-      if (size > limit) {
-        reject(new TranslationError("entry too long", 413));
-        request.destroy();
-        return;
-      }
-      chunks.push(chunk);
-    });
-    request.on("end", () => resolve(Buffer.concat(chunks).toString("utf8")));
-    request.on("error", reject);
-  });
+const translations = limiter(TRANSLATIONS_PER_HOUR, 60 * 60 * 1000);
 
 const serveMood = async (request, response) => {
-  if (request.method === "OPTIONS") {
-    response.writeHead(204, {
-      "access-control-allow-origin": "*",
-      "access-control-allow-methods": "POST, OPTIONS",
-      "access-control-allow-headers": "content-type, authorization",
-      "access-control-max-age": "86400",
-    });
-    response.end();
-    return;
-  }
   if (request.method !== "POST") {
     sendJson(response, 405, { error: "POST a diary entry" });
+    return;
+  }
+  // Who is asking: an account when there is a database, else the address.
+  let who = clientAddress(request);
+  if (accounts) {
+    const user = await accounts.authenticate(bearer(request)).catch(() => null);
+    if (!user) {
+      sendJson(response, 401, { error: "unknown account" });
+      return;
+    }
+    who = user.id;
+  } else if (APP_TOKEN && bearer(request) !== APP_TOKEN) {
+    sendJson(response, 401, { error: "unauthorized" });
     return;
   }
   if (!translator.enabled) {
     sendJson(response, 503, { error: "translation is not configured" });
     return;
   }
-  if (APP_TOKEN && request.headers.authorization !== "Bearer " + APP_TOKEN) {
-    sendJson(response, 401, { error: "unauthorized" });
-    return;
-  }
-
-  const address =
-    String(request.headers["x-forwarded-for"] || "").split(",")[0].trim() ||
-    request.socket.remoteAddress;
-  const count = (translationCounts.get(address) || 0) + 1;
-  translationCounts.set(address, count);
-  if (count > TRANSLATIONS_PER_HOUR) {
+  if (!translations(who)) {
     sendJson(response, 429, { error: "too many entries this hour" });
     return;
   }
@@ -313,7 +295,7 @@ const serveMood = async (request, response) => {
   // The entry is held only for the length of this request: never logged,
   // never written anywhere.
   try {
-    const body = JSON.parse(await readBody(request, MAX_ENTRY * 4 + 1024));
+    const body = await readJson(request, MAX_ENTRY * 4 + 1024);
     const date =
       typeof body.date === "string" && /^\d{4}-\d{2}-\d{2}$/.test(body.date)
         ? body.date
@@ -321,9 +303,7 @@ const serveMood = async (request, response) => {
     const mood = await translator.translate(body.entry, date);
     sendJson(response, 200, { mood });
   } catch (error) {
-    if (error instanceof SyntaxError) {
-      sendJson(response, 400, { error: "send JSON: { entry, date }" });
-    } else if (error instanceof TranslationError) {
+    if (error instanceof HttpError || error instanceof TranslationError) {
       sendJson(response, error.status, { error: error.message });
     } else {
       console.error("translation failed:", error?.status || "", error?.name || "error");
@@ -332,14 +312,98 @@ const serveMood = async (request, response) => {
   }
 };
 
+const serveApi = async (request, response, pathname) => {
+  if (request.method === "OPTIONS") {
+    sendPreflight(response);
+    return;
+  }
+  if (pathname === "/api/mood") {
+    await serveMood(request, response);
+    return;
+  }
+  if (accounts && (await accounts.handle(request, response, pathname))) {
+    return;
+  }
+  if (!accounts && /^\/api\/(account|me|invites|friends)(\/|$)/.test(pathname)) {
+    sendJson(response, 503, { error: "friends are not configured on this server" });
+    return;
+  }
+  sendJson(response, 404, { error: "no such thing" });
+};
+
 const server = http.createServer((request, response) => {
-  if (request.url === "/api/mood" || request.url.startsWith("/api/mood?")) {
-    serveMood(request, response);
+  const pathname = (request.url || "/").split("?")[0];
+  if (pathname === "/api" || pathname.startsWith("/api/")) {
+    serveApi(request, response, pathname).catch((error) => {
+      console.error("api error:", error.code || error.message);
+      if (!response.headersSent) {
+        sendJson(response, 500, { error: "something went wrong" });
+      }
+    });
     return;
   }
   serveStatic(request, response);
 });
 const wss = new WebSocketServer({ server });
+
+// The home being visited, if the visitor's account is its owner or one of
+// the owner's friends.
+const admitVisit = async ({ visit, token }) => {
+  if (!accounts || !/^[0-9a-f-]{36}$/i.test(visit)) {
+    return null;
+  }
+  const user = await accounts.authenticate(typeof token === "string" ? token : "");
+  if (!user || !(await accounts.areFriends(user.id, visit.toLowerCase()))) {
+    return null;
+  }
+  return visit.toLowerCase();
+};
+
+// Puts a client in the room `code` (made on first arrival as a private
+// room), or in a new open room when `code` is null. A full room or a full
+// server turns the client away.
+const enterRoom = (client, code) => {
+  if (client.readyState !== WebSocket.OPEN) {
+    return;
+  }
+  if (code) {
+    const existing = rooms.get(code);
+    if (existing && existing.clients.size >= MAX_PER_ROOM) {
+      send(client, { t: "full", room: code });
+      client.close(4001, "room full");
+      return;
+    }
+    if (!existing) {
+      if (rooms.size >= MAX_ROOMS) {
+        send(client, { t: "busy" });
+        client.close(4002, "busy");
+        return;
+      }
+      rooms.set(code, { clients: new Set(), open: false });
+    }
+  } else {
+    if (rooms.size >= MAX_ROOMS) {
+      send(client, { t: "busy" });
+      client.close(4002, "busy");
+      return;
+    }
+    code = openRoom();
+  }
+
+  const room = rooms.get(code);
+  client.slot = freeSlot(room);
+  room.clients.add(client);
+  client.room = code;
+
+  send(client, {
+    t: "welcome",
+    room: code,
+    peers: room.clients.size,
+    max: MAX_PER_ROOM,
+    slot: client.slot,
+  });
+  broadcast(room, { t: "peer", peers: room.clients.size }, client);
+};
 
 wss.on("connection", (client) => {
   client.isAlive = true;
@@ -375,52 +439,36 @@ wss.on("connection", (client) => {
     }
 
     if (message.t === "join") {
-      if (client.room) {
+      if (client.room || client.joining) {
+        return;
+      }
+
+      // A visit: someone's own water, open only to them and their friends.
+      // Its room name has a colon, which a ?room= code can never have.
+      if (typeof message.visit === "string") {
+        client.joining = true;
+        admitVisit(message)
+          .then((home) => {
+            client.joining = false;
+            if (!home) {
+              send(client, { t: "denied" });
+              client.close(4003, "not friends");
+              return;
+            }
+            enterRoom(client, "home:" + home);
+          })
+          .catch(() => {
+            client.joining = false;
+            client.close(1011, "try again");
+          });
         return;
       }
 
       let code = validRoom(message.room) ? message.room.toLowerCase() : null;
-
-      if (code) {
-        const existing = rooms.get(code);
-        if (existing && existing.clients.size >= MAX_PER_ROOM) {
-          send(client, { t: "full", room: code });
-          client.close(4001, "room full");
-          return;
-        }
-        if (!existing) {
-          if (rooms.size >= MAX_ROOMS) {
-            send(client, { t: "busy" });
-            client.close(4002, "busy");
-            return;
-          }
-          rooms.set(code, { clients: new Set(), open: false });
-        }
-      } else {
+      if (!code) {
         code = findRoom();
-        if (!code) {
-          if (rooms.size >= MAX_ROOMS) {
-            send(client, { t: "busy" });
-            client.close(4002, "busy");
-            return;
-          }
-          code = openRoom();
-        }
       }
-
-      const room = rooms.get(code);
-      client.slot = freeSlot(room);
-      room.clients.add(client);
-      client.room = code;
-
-      send(client, {
-        t: "welcome",
-        room: code,
-        peers: room.clients.size,
-        max: MAX_PER_ROOM,
-        slot: client.slot,
-      });
-      broadcast(room, { t: "peer", peers: room.clients.size }, client);
+      enterRoom(client, code);
       return;
     }
 
@@ -511,6 +559,17 @@ wss.on("close", () => {
   clearInterval(heartbeat);
 });
 
-server.listen(PORT, () => {
-  console.log("moodpage on http://localhost:" + PORT);
-});
+// With a database, its tables are brought up to date before anyone arrives.
+(db ? db.migrate() : Promise.resolve())
+  .then(() => {
+    server.listen(PORT, () => {
+      console.log(
+        "moodpage on http://localhost:" + PORT,
+        accounts ? "(with friends)" : "(no DATABASE_URL: no friends)",
+      );
+    });
+  })
+  .catch((error) => {
+    console.error("database could not be prepared:", error.code || error.message);
+    process.exit(1);
+  });
