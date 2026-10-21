@@ -27,7 +27,8 @@ python3 -m http.server 4173
 ```
 
 ```bash
-# the page plus the shared rooms, on one local origin:
+# the page plus the shared rooms, on one local origin
+# (from the repository root; the server lives in server/):
 npm install
 npm start
 ```
@@ -47,7 +48,7 @@ the page at a relay on another host.
 
 The plain static page (GitHub Pages, `python3 -m http.server`) keeps the
 `moodpage-ws` meta tag empty and therefore runs solo: it never tries to connect
-and never logs connection errors. On the Node server, `server.js` fills that
+and never logs connection errors. On the Node server, `server/server.js` fills that
 meta tag in at runtime with the page's own origin.
 
 ### Deploying the relay
@@ -55,12 +56,15 @@ meta tag in at runtime with the page's own origin.
 The Node app is one process that serves the static site and the rooms on the
 same origin. On Coolify (nixpacks), point a service at this repository's root:
 
-- Build pack: Nixpacks (auto-detects the root `package.json`)
+- Build pack: Nixpacks (auto-detects the root `package.json`, a thin npm
+  workspace whose `npm start` runs `server/`)
 - Ports exposes: `8787`
 - Health check: `GET /health`
 - Domains: the domain you serve the page from
 
-Coolify/Traefik terminates TLS; `server.js` reads `x-forwarded-proto` and serves
+- Environment: `OPENROUTER_API_KEY` to turn on the app's translator
+
+Coolify/Traefik terminates TLS; `server/server.js` reads `x-forwarded-proto` and serves
 the page with `wss://<same domain>` in its meta tag, so the published page talks
 to itself. The GitHub Pages mirror of the repository stays a silent, solo copy.
 
@@ -91,12 +95,14 @@ sound.js            soft, synthesised water-and-air ambience
 moodpage.js         MOODPAGE.create(): one moodpage in any element
 main.js             the site: today's mood, full screen
 examples/           a developer page with two moodpages side by side
-server.js           Node app: static site, room relay, /api/mood
-translate.js        diary entry → mood, with Claude via OpenRouter (for the app)
-mood-schema.js      the mood's fields and ranges; keeps any mood in range
-mobile/             the Expo app: a private diary of moodpages
-package.json        the relay's only dependency (`ws`)
 journal/            dated, non-identifying mood logs
+server/             the Node app (its own package.json)
+  server.js         static site, room relay, /api/mood
+  translate.js      diary entry → mood, with Claude via OpenRouter (for the app)
+  mood-schema.js    the mood's fields and ranges; keeps any mood in range
+  .env.example      the server's settings; copy to server/.env
+mobile/             the Expo app: a private diary of moodpages
+package.json        workspace root: `npm install` / `npm start` run server/
 AGENT.md            instructions for the next day
 ```
 
@@ -112,7 +118,7 @@ down for `prefers-reduced-motion`.
 The optional room relay forwards the same normalized drops and strokes to the
 others in a room, so the water lands in the same relative place on a
 different screen. It stores nothing and keeps at most five clients per room.
-`server.js` serves the static site and the relay on the same origin and fills
+`server/server.js` serves the static site and the relay on the same origin and fills
 the `moodpage-ws` meta tag at runtime; on any other static host the meta stays
 empty and the page runs solo.
 
@@ -140,9 +146,10 @@ is one of these, made by `main.js` and kept on `window.moodpage`.
 where each day becomes weather. The words stay on the phone; the server's
 `POST /api/mood` turns an entry into a mood with Claude (through OpenRouter), using this
 repository's AGENT.md as its field guide, and keeps nothing. It is off unless
-`OPENROUTER_API_KEY` is set, in the environment or a `.env` next to
-`server.js` (see `.env.example`; dotfiles are never served) (`MOODPAGE_MODEL` picks another OpenRouter model;
-the default is `anthropic/claude-opus-5.5`). See [`mobile/README.md`](mobile/README.md).
+`OPENROUTER_API_KEY` is set, in the environment or in `server/.env` (copy
+`server/.env.example`; the server never serves its own directory or any
+dotfile). `MOODPAGE_MODEL` picks another OpenRouter model; the default is
+`anthropic/claude-opus-5.5`. See [`mobile/README.md`](mobile/README.md).
 
 ## Publishing
 
@@ -151,9 +158,9 @@ GitHub Pages if you enable it (Settings → Pages → Deploy from a branch → `
 root). Every push to `main` will then update that mirror. The GitHub Pages copy
 runs solo, because its `moodpage-ws` meta tag is empty.
 
-The room relay is part of the Node app in `server.js`. On Coolify, a nixpacks
+The room relay is part of the Node app in `server/`. On Coolify, a nixpacks
 service on this repository's root serves the site and the rooms together (port
-`8787`, health check `GET /health`); `server.js` fills the meta tag with the
+`8787`, health check `GET /health`); `server/server.js` fills the meta tag with the
 page's own `wss://` origin, so no domain is hard-coded in the repository.
 
 After each daily change:

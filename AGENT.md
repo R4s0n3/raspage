@@ -34,7 +34,7 @@ Translate it into light, colour, weather, density, tempo, and movement.
   require a gesture), fades in gently, and goes quiet with a hidden tab.
 - **No build step and no framework.** The page is vanilla HTML, CSS, and JS: no
   npm dependencies, external fonts, image libraries, or CDNs. The production
-  Node app in `server.js` serves the static page plus the shared rooms and
+  Node app in `server/server.js` serves the static page plus the shared rooms and
   uses one small dependency (`ws`); the page does not need it to run.
 - **Every visible colour comes from `mood.js`.** The CSS fallback keeps its own
   defaults, but the live page must not contain hard-coded scene colours.
@@ -158,16 +158,17 @@ shader.js           WebGL atmosphere: clouds, light, shader dust
 interaction.js      water height field, pointer/touch, motion scaling
 app.js              the sky renderer: WebGL setup, water texture, time
 motes.js            2D layer: long light streams, dust, bokeh
-realtime.js         shared room client (optional, needs server.js)
+realtime.js         shared room client (optional, needs server/)
 sound.js            synthesised ambience: water, air, drips, touch
 moodpage.js         MOODPAGE.create(): one moodpage in one element
 main.js             the site: today's mood, full screen, title, room
 examples/embed.html developer page: two moodpages, setMood/pause/destroy
-server.js           Node app: static site + room relay + /api/mood
-translate.js        diary entry → mood with Claude via OpenRouter, for the app
-mood-schema.js      every translatable field and its range; clamps moods
+server/             the Node app, with its own package.json (`ws`):
+  server.js         static site (this root) + room relay + /api/mood
+  translate.js      diary entry → mood with Claude via OpenRouter, for the app
+  mood-schema.js    every translatable field and its range; clamps moods
 mobile/             the Expo app (its own README)
-package.json        the server's only dependency (`ws`)
+package.json        workspace root: `npm install` / `npm start` run server/
 favicon.svg         small static mark
 journal/            one atmospheric log per day
 AGENT.md            this file
@@ -177,7 +178,7 @@ README.md           human-facing overview and run instructions
 The page loads nine classic scripts in this order: `mood.js`, `shader.js`,
 `interaction.js`, `app.js`, `motes.js`, `realtime.js`, `sound.js`,
 `moodpage.js`, then `main.js`. No bundler and no server code are required for
-the page itself; `realtime.js` and `server.js` only power the shared rooms.
+the page itself; `realtime.js` and `server/` only power the shared rooms.
 
 ### The engine is embeddable
 
@@ -227,7 +228,7 @@ check `examples/embed.html` still runs two side by side.
   also lay down ink that runs with the ripples, bleeds, and fades within
   seconds. Every gesture, local or remote, is also announced through
   `onDisturb()` so the `life` drifters can react to it.
-- **Rooms (`realtime.js` + `server.js`)** — rooms of up to five people in the
+- **Rooms (`realtime.js` + `server/`)** — rooms of up to five people in the
   same water. The client forwards normalized drops and strokes to the relay,
   which echoes them to the others in the room and stores nothing.
 - **Sound (`sound.js`)** — Web Audio, built from looped noise and sine
@@ -475,16 +476,16 @@ simulation continues rather than jumping.
 
 ### Adding a mood field
 
-The app's translator (`translate.js`) reads this guide's "Translating a diary
+The app's translator (`server/translate.js`) reads this guide's "Translating a diary
 entry" and "Field guide" sections as its instructions, so keep them accurate:
 what is written there is what every app user's weather is made from. A new
-field also goes into `mood-schema.js` with its comfortable range; anything
+field also goes into `server/mood-schema.js` with its comfortable range; anything
 not listed there always comes from today's `mood.js`.
 
 ### Adding a shader uniform
 
 1. Add the uniform to `shader.js` and use it.
-2. Add the field to `mood.js` (and `mood-schema.js`, see above).
+2. Add the field to `mood.js` (and `server/mood-schema.js`, see above).
 3. Wire it in `applyMood()` in `app.js` with `set("u_name", ...)`.
 4. Test that the whole page still compiles: a missing uniform is silently
    ignored by the helper, but a typo will quietly do nothing.
@@ -519,7 +520,7 @@ scrolls the page. Do not add a second interaction layer on top; extend the water
 
 ### Shared rooms
 
-`realtime.js` and `server.js` add wordless rooms. Each room holds up to five
+`realtime.js` and `server/server.js` add wordless rooms. Each room holds up to five
 people (`MAX_PER_ROOM` env var on the server, default `5`). Visitors without a
 room code are placed in the *fullest* open room that still has space, so
 strangers end up together instead of alone; when every open room is full a new
@@ -548,7 +549,7 @@ connection. Locally on a plain static server, `?room=CODE` still reaches for
 
 For production, point a Coolify (nixpacks) service at the repository root with
 port `8787` and health check `GET /health`. Traefik terminates TLS;
-`server.js` reads `x-forwarded-proto` and serves the page with `wss://<same
+`server/server.js` reads `x-forwarded-proto` and serves the page with `wss://<same
 domain>` in its meta, so no domain is hard-coded anywhere. The GitHub Pages
 mirror remains a silent, solo copy.
 
@@ -710,7 +711,7 @@ the staying-in are in the enclosure; the "softening" is in the clearing light.
 - Remote: `origin` → `R4s0n3/raspage` on GitHub.
 - The site is static at the repository root; GitHub Pages can serve `main` /
   `/` directly as a solo mirror (the `moodpage-ws` meta tag is empty).
-- The room relay lives in `server.js`, served together with the page by a
+- The room relay lives in `server/server.js`, served together with the page by a
   Coolify (nixpacks) service on the repository root, port `8787`, health check
   `GET /health`. It fills the meta tag with the page's own `wss://` origin at
   runtime; no domain is hard-coded in the repo.

@@ -13,7 +13,10 @@
  * it. The relay stores nothing: it only forwards normalized drops and
  * strokes to the others in the room.
  *
- *   npm install
+ * The site it serves is the repository root, one level up; this directory
+ * holds only the server.
+ *
+ *   npm install          # from the repository root
  *   npm start            # PORT=8787 by default
  */
 "use strict";
@@ -25,8 +28,8 @@ const crypto = require("crypto");
 const { WebSocketServer, WebSocket } = require("ws");
 const { createTranslator, TranslationError, MAX_ENTRY } = require("./translate");
 
-// Secrets for local runs can live in a .env next to this file (never
-// committed, never served). Variables already set, e.g. by Coolify, win.
+// Secrets for local runs can live in server/.env (never committed, never
+// served). Variables already set, e.g. by Coolify, win.
 try {
   process.loadEnvFile(path.join(__dirname, ".env"));
 } catch {
@@ -38,7 +41,8 @@ const MAX_PER_ROOM = Math.max(2, Number(process.env.MAX_PER_ROOM) || 5);
 const MAX_ROOMS = 400;
 const MESSAGE_LIMIT = 120; // messages per second, per client
 
-const STATIC_ROOT = path.resolve(__dirname);
+// The site: the repository root, one level up from this directory.
+const STATIC_ROOT = path.resolve(__dirname, "..");
 
 // POST /api/mood: a diary entry in, a mood out (translate.js). Off unless
 // OPENROUTER_API_KEY is set. MOODPAGE_APP_TOKEN, when set, is a shared
@@ -213,18 +217,17 @@ const serveStatic = (request, response) => {
   const filePath = path.normalize(path.join(STATIC_ROOT, pathname));
   const insideRoot =
     filePath === STATIC_ROOT || filePath.startsWith(STATIC_ROOT + path.sep);
-  const segments = filePath.split(path.sep);
-
-  // Never serve the diary's private drawer, the repository itself, its
-  // dependencies, the app's source, or any dotfile (.env holds secrets).
-  const relative = path.relative(STATIC_ROOT, filePath).split(path.sep);
+  // Never serve the diary's private drawer, the repository itself (.git and
+  // every other dotfile: .env holds secrets), dependencies, or the server's
+  // and the app's source.
+  const segments = path.relative(STATIC_ROOT, filePath).split(path.sep);
   if (
     !insideRoot ||
-    relative.some((segment) => segment.startsWith(".")) ||
+    segments.some((segment) => segment.startsWith(".")) ||
     segments.includes("private") ||
-    segments.includes(".git") ||
     segments.includes("node_modules") ||
-    segments.includes("mobile")
+    segments[0] === "server" ||
+    segments[0] === "mobile"
   ) {
     response.writeHead(404, { "content-type": "text/plain" });
     response.end("moodpage");

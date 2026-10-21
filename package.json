@@ -2,15 +2,14 @@
   "name": "moodpage",
   "version": "1.0.0",
   "private": true,
-  "description": "moodpage: the atmosphere, its shared rooms, and the diary translator",
-  "main": "server.js",
+  "description": "moodpage: a living background for the weather inside, its server, and its app",
+  "workspaces": [
+    "server"
+  ],
   "scripts": {
-    "start": "node server.js"
+    "start": "npm start --workspace server"
   },
   "engines": {
-    "node": ">=18"
-  },
-  "dependencies": {
-    "ws": "^8.18.0"
+    "node": ">=20.12"
   }
 }

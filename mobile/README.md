@@ -34,19 +34,20 @@ it a mood and later sends new ones in; the sky changes in place and never
 reloads. A change to the engine reaches the app on the next `npm start`.
 
 The diary lives only on the device. To make the weather, the entry is sent
-once to the moodpage server (`server.js`, `POST /api/mood`), which asks Claude
+once to the moodpage server (`server/`, `POST /api/mood`), which asks Claude
 through OpenRouter to translate it with AGENT.md's own field guide and returns
 only the mood. Requests are only routed to providers that do not keep or train
 on them, and the server stores and logs nothing.
 
 ## Run it
 
-The server, from the repository root. Put the OpenRouter key in a `.env`
-there (copy `.env.example`); it is never committed and never served:
+The server lives in `server/`; run it from the repository root. Put the
+OpenRouter key in `server/.env` (copy `server/.env.example`); it is never
+committed and never served:
 
 ```bash
 npm install
-cp .env.example .env                   # then fill in OPENROUTER_API_KEY
+cp server/.env.example server/.env     # then fill in OPENROUTER_API_KEY
 npm start                              # http://localhost:8787
 ```
 
@@ -60,7 +61,8 @@ npm start                              # then press i, a, or w
 ```
 
 `mobile/.env` holds only `EXPO_PUBLIC_` settings, and Expo builds those into
-the app, where anyone can read them: never put the OpenRouter key there.
+the app, where anyone can read them: never put the OpenRouter key there;
+it belongs in `server/.env`.
 `EXPO_PUBLIC_MOODPAGE_API` is the server (default `http://localhost:8787`; a
 phone on the same network needs your computer's address, e.g.
 `http://192.168.1.5:8787`). If the server sets `MOODPAGE_APP_TOKEN`, give the
