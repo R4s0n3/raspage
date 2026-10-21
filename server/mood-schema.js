@@ -7,6 +7,11 @@
  * back. Fields a mood should not change from day to day (resolution, grid
  * size, reduced-motion scales) are not in the schema at all: they always come
  * from the base mood.
+ *
+ * Claude's strict JSON mode compiles the schema into a grammar with a size
+ * limit (about 55 fields), so the schema asks only for the fields in
+ * TRANSLATED: the ones that carry a day's feeling. clampMood() still checks
+ * every field in FIELDS, and the rest come from the base mood.
  */
 "use strict";
 
@@ -115,6 +120,38 @@ const FIELDS = {
   },
 };
 
+// The fields a translation sets (44 numbers and colours, plus the title and
+// description). Keep it under the grammar limit: about 55 fields in all.
+const TRANSLATED = {
+  palette: ["night", "deep", "haze", "light", "glow"],
+  composition: [
+    "cloudCover",
+    "cloudScale",
+    "turbulence",
+    "lightX",
+    "lightY",
+    "lightRadius",
+    "lightIntensity",
+    "rays",
+  ],
+  atmosphere: ["stars", "rain"],
+  water: ["surface", "glints", "plankton"],
+  life: [
+    "creatures",
+    "pulse",
+    "speed",
+    "tendrilLength",
+    "gather",
+    "curiosity",
+    "glow",
+    "shy",
+  ],
+  sound: ["water", "lap", "wind", "windTone", "drips", "pitch"],
+  motes: ["streamers", "dust", "bokeh", "trailLength", "speed", "orbit", "opacity"],
+  motion: ["speed", "drift"],
+  grade: ["contrast", "saturation", "exposure"],
+};
+
 const TEXT = { title: 60, description: 400 };
 
 const object = (properties) => ({
@@ -146,10 +183,10 @@ const fieldSchema = (spec) => {
 // because numeric constraints are not part of the supported schema subset.
 const moodJsonSchema = () => {
   const groups = {};
-  for (const [group, fields] of Object.entries(FIELDS)) {
+  for (const [group, names] of Object.entries(TRANSLATED)) {
     const properties = {};
-    for (const [name, spec] of Object.entries(fields)) {
-      properties[name] = fieldSchema(spec);
+    for (const name of names) {
+      properties[name] = fieldSchema(FIELDS[group][name]);
     }
     groups[group] = object(properties);
   }
@@ -223,4 +260,4 @@ const clampMood = (raw, base, date) => {
   return mood;
 };
 
-module.exports = { FIELDS, moodJsonSchema, clampMood };
+module.exports = { FIELDS, TRANSLATED, moodJsonSchema, clampMood };

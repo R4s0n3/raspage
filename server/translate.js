@@ -19,6 +19,9 @@ const { moodJsonSchema, clampMood } = require("./mood-schema");
 
 const ENDPOINT = "https://openrouter.ai/api/v1/chat/completions";
 const MODEL = process.env.MOODPAGE_MODEL || "anthropic/claude-opus-5.5";
+// How long the model thinks first. Low keeps a translation to a few
+// seconds; the moods were as good as at medium in testing.
+const EFFORT = process.env.MOODPAGE_EFFORT || "low";
 const MAX_ENTRY = 6000;
 
 // The base mood: mood.js as the page loads it. It supplies every field the
@@ -62,8 +65,9 @@ const buildInstructions = (root, base) => {
     "a quiet, neutral, overcast mood and do nothing else.",
     "",
     "Below are the guide's own sections on translating an entry and on every",
-    "field, followed by a worked example of a complete mood. Stay within the",
-    "comfortable ranges.",
+    "field, followed by a worked example of a complete mood. You set only the",
+    "fields in the response schema; the rest keep the example's values. Stay",
+    "within the comfortable ranges.",
     "",
     section(guide, "Translating a diary entry"),
     "",
@@ -88,29 +92,44 @@ class TranslationError extends Error {
 }
 
 const ATTEMPTS = 3;
+// A phone gives up on a request after about a minute, so the whole
+// translation has to fit well inside that: each attempt gets 30 seconds,
+// and no new attempt starts after 20 (at most about 50 in all).
+const ATTEMPT_TIMEOUT = 30000;
+const RETRY_WINDOW = 20000;
 // Busy (429), no model for these parameters (404), upstream trouble (5xx).
 const RETRY_STATUSES = new Set([404, 408, 429, 500, 502, 503, 504]);
 
 // One chat completion from OpenRouter. Only the HTTP status and OpenRouter's
 // error code are ever reported, never the request.
 const openRouter = (apiKey) => async (body) => {
-  const response = await fetch(ENDPOINT, {
-    method: "POST",
-    headers: {
-      authorization: "Bearer " + apiKey,
-      "content-type": "application/json",
-      "x-title": "moodpage",
-    },
-    body: JSON.stringify(body),
-  });
+  let response;
+  try {
+    response = await fetch(ENDPOINT, {
+      method: "POST",
+      signal: AbortSignal.timeout(ATTEMPT_TIMEOUT),
+      headers: {
+        authorization: "Bearer " + apiKey,
+        "content-type": "application/json",
+        "x-title": "moodpage",
+      },
+      body: JSON.stringify(body),
+    });
+  } catch {
+    console.error("openrouter error: no answer (timeout or network)");
+    throw new TranslationError("the weather took too long", 504, true);
+  }
   const data = await response.json().catch(() => null);
   if (!response.ok || data?.error) {
     const status = data?.error?.code || response.status;
-    // Only the status and a hint for the operator: never the request.
+    // The status and OpenRouter's own message, for the operator; never the
+    // request.
     console.error(
       "openrouter error:",
       status,
-      status === 402 ? "(out of credits: https://openrouter.ai/settings/credits)" : "",
+      status === 402
+        ? "(out of credits: https://openrouter.ai/settings/credits)"
+        : String(data?.error?.message || "").slice(0, 200),
     );
     throw new TranslationError(
       status === 429 ? "the weather is busy, try again soon" : "the weather could not be made",
@@ -140,7 +159,7 @@ const createTranslator = ({ root, complete } = {}) => {
     const request = {
       model: MODEL,
       max_tokens: 16000,
-      reasoning: { effort: "medium", exclude: true },
+      reasoning: { effort: EFFORT, exclude: true },
       response_format: {
         type: "json_schema",
         json_schema: { name: "mood", strict: true, schema },
@@ -174,17 +193,25 @@ const createTranslator = ({ root, complete } = {}) => {
       ],
     };
 
+    const started = Date.now();
+    const seconds = () => ((Date.now() - started) / 1000).toFixed(1) + "s";
     let lastError = null;
     for (let attempt = 1; attempt <= ATTEMPTS; attempt += 1) {
       try {
-        return clampMood(parse(await send(request)), base, date);
+        const data = await send(request);
+        const mood = clampMood(parse(data), base, date);
+        // How long and which model: never the entry or the mood.
+        console.log("mood made in", seconds(), "by", data?.model || MODEL, "attempt", attempt);
+        return mood;
       } catch (error) {
         lastError = error;
-        if (!(error instanceof TranslationError) || !error.retry) {
-          throw error;
+        const late = Date.now() - started > RETRY_WINDOW;
+        if (!(error instanceof TranslationError) || !error.retry || late) {
+          break;
         }
       }
     }
+    console.log("no mood after", seconds());
     throw lastError;
   };
 
