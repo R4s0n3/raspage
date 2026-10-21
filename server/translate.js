@@ -78,11 +78,18 @@ const buildInstructions = (root, base) => {
 };
 
 class TranslationError extends Error {
-  constructor(message, status = 502) {
+  constructor(message, status = 502, retry = false) {
     super(message);
     this.status = status;
+    // Worth another attempt: a router such as openrouter/free picks a
+    // different model each time.
+    this.retry = retry;
   }
 }
+
+const ATTEMPTS = 3;
+// Busy (429), no model for these parameters (404), upstream trouble (5xx).
+const RETRY_STATUSES = new Set([404, 408, 429, 500, 502, 503, 504]);
 
 // One chat completion from OpenRouter. Only the HTTP status and OpenRouter's
 // error code are ever reported, never the request.
@@ -108,6 +115,7 @@ const openRouter = (apiKey) => async (body) => {
     throw new TranslationError(
       status === 429 ? "the weather is busy, try again soon" : "the weather could not be made",
       status === 429 ? 503 : 502,
+      RETRY_STATUSES.has(status),
     );
   }
   return data;
@@ -129,7 +137,7 @@ const createTranslator = ({ root, complete } = {}) => {
       throw new TranslationError("translation is not configured", 503);
     }
 
-    const data = await send({
+    const request = {
       model: MODEL,
       max_tokens: 16000,
       reasoning: { effort: "medium", exclude: true },
@@ -164,23 +172,36 @@ const createTranslator = ({ root, complete } = {}) => {
             "\n</entry>",
         },
       ],
-    });
+    };
 
+    let lastError = null;
+    for (let attempt = 1; attempt <= ATTEMPTS; attempt += 1) {
+      try {
+        return clampMood(parse(await send(request)), base, date);
+      } catch (error) {
+        lastError = error;
+        if (!(error instanceof TranslationError) || !error.retry) {
+          throw error;
+        }
+      }
+    }
+    throw lastError;
+  };
+
+  // The mood in a completion, or an error saying why there is none.
+  const parse = (data) => {
     const choice = data?.choices?.[0];
     if (choice?.finish_reason === "content_filter") {
       throw new TranslationError("the entry could not be translated", 422);
     }
     if (choice?.finish_reason === "length") {
-      throw new TranslationError("the weather came back incomplete");
+      throw new TranslationError("the weather came back incomplete", 502, true);
     }
-
-    let raw = null;
     try {
-      raw = JSON.parse(choice?.message?.content || "");
+      return JSON.parse(choice?.message?.content || "");
     } catch {
-      throw new TranslationError("the weather came back unreadable");
+      throw new TranslationError("the weather came back unreadable", 502, true);
     }
-    return clampMood(raw, base, date);
   };
 
   return { translate, base, enabled: Boolean(send) };

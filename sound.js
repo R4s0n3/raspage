@@ -597,12 +597,25 @@
       master.gain.linearRampToValueAtTime(value, ctx.currentTime + seconds);
     };
 
+    // iOS may refuse to start audio (the silent switch, another app holding
+    // the audio session, no gesture yet). That is not an error: stay quiet
+    // and try again on the next touch.
+    const wake = () =>
+      Promise.resolve(ctx?.resume?.())
+        .catch(() => {})
+        .then(() => {
+          if (ctx && ctx.state !== "running") {
+            listen();
+          }
+          return ctx?.state === "running";
+        });
+
     const start = () => {
       if (paused || config.volume <= 0) {
         return;
       }
       if (ctx) {
-        ctx.resume?.();
+        wake();
         return;
       }
       try {
@@ -672,7 +685,7 @@
       nextBubble = now + 0.5;
       fadeTo(config.volume, 4);
       interval = window.setInterval(step, STEP_MS);
-      ctx.resume?.();
+      wake();
     };
 
     const UNLOCK = ["pointerdown", "pointerup"];
@@ -684,9 +697,14 @@
         }
       }
     };
-    for (const type of UNLOCK) {
-      element.addEventListener(type, unlock, { passive: true });
+    // Adding the same listener twice is harmless, so this can be called
+    // whenever the sound needs a touch to wake.
+    function listen() {
+      for (const type of UNLOCK) {
+        element.addEventListener(type, unlock, { passive: true });
+      }
     }
+    listen();
 
     const unsubscribe = interaction?.onDisturb?.(onDisturb);
 
@@ -696,7 +714,10 @@
         return;
       }
       fadeTo(0, 0.3);
-      window.setTimeout(() => paused && ctx?.suspend?.(), 350);
+      window.setTimeout(
+        () => paused && Promise.resolve(ctx?.suspend?.()).catch(() => {}),
+        350,
+      );
     };
 
     const resume = () => {
@@ -704,7 +725,7 @@
       if (!ctx) {
         return;
       }
-      ctx.resume?.().then(() => !paused && fadeTo(config.volume, 2));
+      wake().then((running) => running && !paused && fadeTo(config.volume, 2));
     };
 
     // A new mood changes the sound in place: the bed and the room glide to
