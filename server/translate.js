@@ -99,7 +99,12 @@ const openRouter = (apiKey) => async (body) => {
   const data = await response.json().catch(() => null);
   if (!response.ok || data?.error) {
     const status = data?.error?.code || response.status;
-    console.error("openrouter error:", status);
+    // Only the status and a hint for the operator: never the request.
+    console.error(
+      "openrouter error:",
+      status,
+      status === 402 ? "(out of credits: https://openrouter.ai/settings/credits)" : "",
+    );
     throw new TranslationError(
       status === 429 ? "the weather is busy, try again soon" : "the weather could not be made",
       status === 429 ? 503 : 502,
