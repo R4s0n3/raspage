@@ -119,7 +119,17 @@ const openRouter = (apiKey) => async (body) => {
     console.error("openrouter error: no answer (timeout or network)");
     throw new TranslationError("the weather took too long", 504, true);
   }
-  const data = await response.json().catch(() => null);
+  // The time limit also covers reading the answer: an answer cut off there
+  // was too slow, not unreadable.
+  let data = null;
+  try {
+    data = await response.json();
+  } catch (error) {
+    if (error?.name === "TimeoutError" || error?.name === "AbortError") {
+      console.error("openrouter error: no answer in time");
+      throw new TranslationError("the weather took too long", 504, true);
+    }
+  }
   if (!response.ok || data?.error) {
     const status = data?.error?.code || response.status;
     // The status and OpenRouter's own message, for the operator; never the
