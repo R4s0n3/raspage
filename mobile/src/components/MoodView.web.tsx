@@ -6,7 +6,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { StyleSheet, View } from "react-native";
 
 import { FALLBACK_PALETTE } from "@/lib/mood";
-import { moodHtml, type MoodViewProps } from "./mood-html";
+import { logFromPage, moodHtml, type MoodViewProps, type PageMessage } from "./mood-html";
 
 export function MoodView({ mood, paused = false }: MoodViewProps) {
   const frame = useRef<HTMLIFrameElement>(null);
@@ -25,9 +25,11 @@ export function MoodView({ mood, paused = false }: MoodViewProps) {
         return;
       }
       try {
-        if (JSON.parse(event.data)?.type === "ready") {
+        const message: PageMessage = JSON.parse(event.data);
+        if (message?.type === "ready") {
           setReady(true);
         }
+        logFromPage(message);
       } catch {
         // Not ours.
       }

@@ -14,3 +14,15 @@ export type MoodViewProps = {
   // Off screen or behind a modal: stop drawing, keep the state.
   paused?: boolean;
 };
+
+// What the engine page says back (src/engine/host.js and log.js).
+export type PageMessage =
+  | { type: "ready" }
+  | { type: "log"; level: "error" | "warn" | "info"; message: string };
+
+// The page's own log lines, in the app's log while developing.
+export const logFromPage = (message: PageMessage) => {
+  if (message.type === "log" && __DEV__) {
+    console.log(`[weather ${message.level}]`, message.message);
+  }
+};

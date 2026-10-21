@@ -11,26 +11,23 @@
  *   { type: "resume" }
  *
  * and the page answers { type: "ready" } once the weather is running.
+ * Errors and warnings inside the page reach the app through log.js.
  */
 (() => {
   "use strict";
+
+  // From log.js, which runs before the engine.
+  const post = window.__moodpagePost;
+  const log = window.__moodpageLog;
 
   const stage = document.querySelector(".stage");
   const page = window.MOODPAGE.create(stage, {
     mood: window.__MOODPAGE_MOOD || window.MOOD,
   });
   if (!page) {
+    log("error", ["the moodpage could not start"]);
     return;
   }
-
-  const send = (message) => {
-    const text = JSON.stringify(message);
-    if (window.ReactNativeWebView) {
-      window.ReactNativeWebView.postMessage(text);
-    } else if (window.parent !== window) {
-      window.parent.postMessage(text, "*");
-    }
-  };
 
   const receive = (message) => {
     if (!message || typeof message.type !== "string") {
@@ -62,5 +59,10 @@
   window.moodpageHost = { receive };
   window.addEventListener("message", onMessage);
 
-  send({ type: "ready" });
+  post({ type: "ready" });
+  log("info", [
+    "weather running:",
+    stage.classList.contains("no-webgl") ? "no WebGL (CSS fallback)" : "WebGL",
+    innerWidth + "x" + innerHeight + "@" + devicePixelRatio,
+  ]);
 })();

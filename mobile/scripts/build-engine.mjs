@@ -2,7 +2,8 @@
  * Bundles the moodpage engine from the repository root into one HTML string
  * the app can hand to a WebView: the stylesheet, today's mood.js as the
  * default weather, the engine scripts, and the host bridge, all inline, so
- * the weather runs offline and never loads anything from the network.
+ * the weather runs offline and never loads anything from the network. log.js
+ * goes first, so even an engine that fails to load is heard.
  *
  * Writes src/engine/engine-html.ts (generated, not committed). Runs on
  * install and before every start.
@@ -42,6 +43,9 @@ ${read(path.join(root, "styles.css"))}
 </head>
 <body>
 <main class="stage moodpage"></main>
+<script>
+${inline(read(path.join(app, "src/engine/log.js")))}
+</script>
 <script>window.__MOODPAGE_MOOD = /*__MOOD__*/null;</script>
 ${SCRIPTS.map((file) => `<script>\n${inline(read(path.join(root, file)))}\n</script>`).join("\n")}
 <script>

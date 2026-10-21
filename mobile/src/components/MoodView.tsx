@@ -8,7 +8,7 @@ import { StyleSheet, View } from "react-native";
 import { WebView, type WebViewMessageEvent } from "react-native-webview";
 
 import { FALLBACK_PALETTE } from "@/lib/mood";
-import { moodHtml, type MoodViewProps } from "./mood-html";
+import { logFromPage, moodHtml, type MoodViewProps, type PageMessage } from "./mood-html";
 
 export function MoodView({ mood, paused = false }: MoodViewProps) {
   const ref = useRef<ComponentRef<typeof WebView>>(null);
@@ -40,9 +40,11 @@ export function MoodView({ mood, paused = false }: MoodViewProps) {
 
   const onMessage = (event: WebViewMessageEvent) => {
     try {
-      if (JSON.parse(event.nativeEvent.data)?.type === "ready") {
+      const message: PageMessage = JSON.parse(event.nativeEvent.data);
+      if (message?.type === "ready") {
         setReady(true);
       }
+      logFromPage(message);
     } catch {
       // Not ours.
     }
