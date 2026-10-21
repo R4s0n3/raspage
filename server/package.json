@@ -6,7 +6,8 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "db:dev": "pglite-server --db=.pglite --port=5433 --max-connections=10"
+    "db:dev": "pglite-server --db=.pglite --port=5433 --max-connections=10",
+    "test": "node test/run.js"
   },
   "engines": {
     "node": ">=20.12"

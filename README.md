@@ -66,6 +66,16 @@ same origin. On Coolify (nixpacks), point a service at this repository's root:
   - `DATABASE_URL` turns on the app's accounts and friends: add a PostgreSQL
     resource in the same Coolify project and use its internal connection
     URL. The server creates and updates its tables on start.
+  - `MOODPAGE_MODEL=anthropic/claude-haiku-5.5`: a mood in about 5 s
+  - `MOODPAGE_CONTACT`: a contact address for the privacy page
+  - Once the app is built: `APPLE_TEAM_ID` (and `ANDROID_CERT_SHA256`) so
+    invite links open the app, `APP_INSTALL_URL` for "Get the app" on invite
+    pages. See `server/.env.example`.
+
+Besides the wordless site, the server answers `/privacy` (the app's privacy
+policy), `/invite/CODE` (an invite page for people without the app) and the
+two `/.well-known` files that let those links open the app. `npm test` runs
+the server's tests against an in-memory Postgres.
 
 Coolify/Traefik terminates TLS; `server/server.js` reads `x-forwarded-proto` and serves
 the page with `wss://<same domain>` in its meta tag, so the published page talks

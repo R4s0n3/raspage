@@ -9,7 +9,8 @@
  * to a relay. Without a room code the relay places a visitor with whoever
  * else is there. `join` adds fields to the join message: the app's
  * { visit, token } asks for a friend's own water, which the relay only
- * opens to friends. Which relay and which room is the page's decision (see main.js); an
+ * opens to friends. `onPeers(count)` hears how many are in the water,
+ * yourself included (1 when alone or disconnected). Which relay and which room is the page's decision (see main.js); an
  * app shell passes its own.
  */
 (() => {
@@ -31,6 +32,14 @@
     }
     const requestedRoom = MOODPAGE.roomCode(options.room);
     const extra = options.join && typeof options.join === "object" ? options.join : {};
+    const onPeers = typeof options.onPeers === "function" ? options.onPeers : () => {};
+    const peers = (count) => {
+      try {
+        onPeers(Number.isInteger(count) && count > 0 ? count : 1);
+      } catch {
+        // A listener's trouble is not the water's.
+      }
+    };
 
     let socket = null;
     let retry = 0;
@@ -64,6 +73,9 @@
         if (Number.isInteger(message.slot) && message.slot >= 0) {
           interaction.state.slot = message.slot;
         }
+        peers(message.peers);
+      } else if (message.t === "peer") {
+        peers(message.peers);
       } else if (message.t === "drop") {
         if (valid(message.x, 0, 1) && valid(message.y, 0, 1)) {
           interaction.addDrop(
@@ -151,6 +163,7 @@
         socket = null;
         // Alone again: back to the first colour until the next room.
         interaction.state.slot = 0;
+        peers(1);
         schedule();
       });
 

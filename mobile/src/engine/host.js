@@ -11,8 +11,12 @@
  *   { type: "mood", mood }    change the weather in place
  *   { type: "pause" }         off screen, app in the background
  *   { type: "resume" }
+ *   { type: "record", on }    send your own touches to the app (for stones)
+ *   { type: "replay", gestures, slot }   replay touches someone left here
  *
- * and the page answers { type: "ready" } once the weather is running.
+ * and the page answers { type: "ready" } once the weather is running,
+ * { type: "peers", count } as people come and go in a shared water, and
+ * { type: "gesture", gesture } for each touch while recording.
  * Errors and warnings inside the page reach the app through log.js.
  */
 (() => {
@@ -27,7 +31,11 @@
   const page = window.MOODPAGE.create(stage, {
     mood: window.__MOODPAGE_MOOD || window.MOOD,
     room: room
-      ? { url: room.url, join: { visit: room.visit, token: room.token } }
+      ? {
+          url: room.url,
+          join: { visit: room.visit, token: room.token },
+          onPeers: (count) => post({ type: "peers", count }),
+        }
       : null,
   });
   if (!page) {
@@ -35,12 +43,47 @@
     return;
   }
 
+  // Your own touches, timed, for the app to keep as a stone.
+  let recording = false;
+  page.water.onLocalGesture((gesture) => {
+    if (recording) {
+      post({ type: "gesture", gesture: { ...gesture, at: Date.now() } });
+    }
+  });
+
+  // Touches someone left here, played back at their own pace in their
+  // colour. A new replay replaces one still running.
+  let replayTimers = [];
+  const replay = (gestures, slot) => {
+    replayTimers.forEach(clearTimeout);
+    replayTimers = [];
+    if (!Array.isArray(gestures)) {
+      return;
+    }
+    for (const g of gestures.slice(0, 400)) {
+      const at = Math.max(0, Math.min(Number(g.at) || 0, 120000));
+      replayTimers.push(
+        setTimeout(() => {
+          if (g.t === "drop") {
+            page.addDrop(g.x, g.y, g.s ?? 1, slot);
+          } else if (g.t === "stroke") {
+            page.addStroke(g.x0, g.y0, g.x1, g.y1, g.s ?? 1, slot);
+          }
+        }, 600 + at),
+      );
+    }
+  };
+
   const receive = (message) => {
     if (!message || typeof message.type !== "string") {
       return;
     }
     if (message.type === "mood" && message.mood && message.mood.palette) {
       page.setMood(message.mood);
+    } else if (message.type === "record") {
+      recording = Boolean(message.on);
+    } else if (message.type === "replay") {
+      replay(message.gestures, Number.isInteger(message.slot) ? message.slot : 1);
     } else if (message.type === "pause") {
       page.pause();
     } else if (message.type === "resume") {

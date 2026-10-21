@@ -167,6 +167,9 @@ server/             the Node app, with its own package.json (`ws`):
   server.js         static site (this root) + room relay + /api/mood
   translate.js      diary entry → mood with Claude via OpenRouter, for the app
   mood-schema.js    every translatable field and its range; clamps moods
+  db.js, accounts.js   Postgres, accounts, friends, invites, stones (the app)
+  links.js, privacy.html   /invite pages, /privacy, /.well-known app links
+  test/             `npm test`: the server against an in-memory Postgres
 mobile/             the Expo app (its own README)
 package.json        workspace root: `npm install` / `npm start` run server/
 favicon.svg         small static mark

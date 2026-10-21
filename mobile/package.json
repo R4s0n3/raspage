@@ -4,11 +4,13 @@
   "main": "expo-router/entry",
   "dependencies": {
     "expo": "~57.0.31",
+    "expo-clipboard": "~57.0.2",
     "expo-constants": "~57.0.22",
     "expo-haptics": "~57.0.3",
     "expo-linking": "~57.0.13",
     "expo-router": "~57.0.29",
     "expo-secure-store": "~57.0.4",
+    "expo-splash-screen": "~57.0.10",
     "expo-sqlite": "~57.0.4",
     "expo-status-bar": "~57.0.1",
     "react": "19.2.3",

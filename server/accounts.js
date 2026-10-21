@@ -18,6 +18,9 @@
  *   POST   /api/invites/:code/accept    become friends       → { friend }
  *   GET    /api/friends                 your friends and their weather
  *   DELETE /api/friends/:id             no longer friends
+ *   POST   /api/friends/:id/stones  { gestures }   leave touches in a friend's
+ *                                       water while they are away
+ *   GET    /api/stones                  touches left for you (delivered once)
  */
 "use strict";
 
@@ -37,6 +40,37 @@ const NAME_LENGTH = 40;
 // No 0/O, 1/I/L: codes are read aloud and typed by hand.
 const CODE_ALPHABET = "23456789ABCDEFGHJKMNPQRSTUVWXYZ";
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const STONE_GESTURES = 400; // per stone
+const STONE_SPAN = 120000; // ms: a stone replays within two minutes
+const STONES_PER_FRIEND = 3; // waiting at once from one friend
+const STONE_DAYS = 7; // undelivered stones sink after a week
+
+const unit = (value) => typeof value === "number" && Number.isFinite(value) && value >= 0 && value <= 1;
+
+// Only well-formed drops and strokes, with their time, in order: the same
+// shapes the relay forwards live.
+const cleanGestures = (list) => {
+  if (!Array.isArray(list)) {
+    return [];
+  }
+  const out = [];
+  for (const g of list.slice(0, STONE_GESTURES)) {
+    if (!g || typeof g !== "object") {
+      continue;
+    }
+    const at = typeof g.at === "number" && Number.isFinite(g.at) ? Math.round(Math.min(Math.max(g.at, 0), STONE_SPAN)) : null;
+    const s = unit(g.s) ? g.s : 1;
+    if (at === null) {
+      continue;
+    }
+    if (g.t === "drop" && unit(g.x) && unit(g.y)) {
+      out.push({ t: "drop", x: g.x, y: g.y, s, at });
+    } else if (g.t === "stroke" && unit(g.x0) && unit(g.y0) && unit(g.x1) && unit(g.y1)) {
+      out.push({ t: "stroke", x0: g.x0, y0: g.y0, x1: g.x1, y1: g.y1, s, at });
+    }
+  }
+  return out.sort((a, b) => a.at - b.at);
+};
 
 const hash = (token) => crypto.createHash("sha256").update(token).digest("hex");
 
@@ -249,6 +283,60 @@ const createAccounts = ({ db, clampMood, base }) => {
       return [200, { friends: rows.map(friendView) }];
     }],
 
+    ["POST", /^\/api\/friends\/([^/]+)\/stones$/, async (request, [id]) => {
+      const user = await requireUser(request);
+      if (!UUID.test(id) || id === user.id || !(await areFriends(user.id, id))) {
+        throw new HttpError(404, "not a friend");
+      }
+      const body = await readJson(request, 256 * 1024);
+      const gestures = cleanGestures(body.gestures);
+      if (!gestures.length) {
+        throw new HttpError(400, "send { gestures }");
+      }
+      await db.query(
+        "INSERT INTO stones (to_user, from_user, gestures) VALUES ($1, $2, $3)",
+        [id, user.id, JSON.stringify(gestures)],
+      );
+      // Only the newest few from one friend wait; older ones sink.
+      await db.query(
+        `DELETE FROM stones WHERE id IN (
+           SELECT id FROM stones WHERE to_user = $1 AND from_user = $2
+           ORDER BY id DESC OFFSET $3)`,
+        [id, user.id, STONES_PER_FRIEND],
+      );
+      return [201, { left: gestures.length }];
+    }],
+
+    // Delivered once: reading them removes them.
+    ["GET", /^\/api\/stones$/, async (request) => {
+      const user = await requireUser(request);
+      await db.query(
+        "DELETE FROM stones WHERE created_at < now() - make_interval(days => $1)",
+        [STONE_DAYS],
+      );
+      const { rows } = await db.query(
+        `DELETE FROM stones WHERE to_user = $1
+         RETURNING id, from_user, gestures, created_at`,
+        [user.id],
+      );
+      if (!rows.length) {
+        return [200, { stones: [] }];
+      }
+      const { rows: senders } = await db.query(
+        "SELECT id, name FROM users WHERE id = ANY($1::uuid[])",
+        [[...new Set(rows.map((row) => row.from_user))]],
+      );
+      const names = new Map(senders.map((row) => [row.id, row.name]));
+      const stones = rows
+        .sort((a, b) => Number(a.id) - Number(b.id))
+        .map((row) => ({
+          from: { id: row.from_user, name: names.get(row.from_user) ?? null },
+          gestures: row.gestures,
+          createdAt: row.created_at,
+        }));
+      return [200, { stones }];
+    }],
+
     ["DELETE", /^\/api\/friends\/([^/]+)$/, async (request, [id]) => {
       const user = await requireUser(request);
       if (!UUID.test(id)) {
@@ -256,6 +344,11 @@ const createAccounts = ({ db, clampMood, base }) => {
       }
       const [a, b] = user.id < id ? [user.id, id] : [id, user.id];
       await db.query("DELETE FROM friendships WHERE a = $1 AND b = $2", [a, b]);
+      // Touches still waiting between the two go with the friendship.
+      await db.query(
+        "DELETE FROM stones WHERE (to_user = $1 AND from_user = $2) OR (to_user = $2 AND from_user = $1)",
+        [user.id, id],
+      );
       return [200, { removed: true }];
     }],
   ];

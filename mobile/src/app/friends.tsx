@@ -36,7 +36,7 @@ import {
   type Friend,
 } from "@/lib/friends";
 import { FALLBACK_PALETTE, type Palette } from "@/lib/mood";
-import { ServerError } from "@/lib/server";
+import { API, ServerError } from "@/lib/server";
 
 type State =
   | { kind: "loading" }
@@ -121,7 +121,9 @@ export default function Friends() {
     setNotice(null);
     try {
       const { code: made } = await createInvite();
-      const link = Linking.createURL(`invite/${made}`);
+      // On a real domain the link opens the app (or a page with the code);
+      // while developing, a link straight into Expo Go.
+      const link = /^https:/.test(API) ? `${API}/invite/${made}` : Linking.createURL(`invite/${made}`);
       const message = `Share weather with me on moodpage: ${link}\n\nOr enter the code ${formatCode(made)} under Friends.`;
       if (Platform.OS === "web") {
         setNotice(`Your invite code: ${formatCode(made)} (valid for 7 days, for one friend)`);
@@ -214,6 +216,13 @@ export default function Friends() {
               for you.
             </Text>
             <NameForm palette={palette} label="Continue" onSubmit={chooseName} />
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => router.push({ pathname: "/recovery", params: { mode: "restore" } })}
+              style={styles.leave}
+            >
+              <Text style={[styles.leaveText, { color: palette.light }]}>I have a recovery code</Text>
+            </Pressable>
           </View>
         )}
 
@@ -283,9 +292,14 @@ export default function Friends() {
             <Text style={[styles.note, { color: palette.light }]}>
               Your latest weather is shared with your friends, never your words. Hold a friend to stop sharing.
             </Text>
-            <Pressable accessibilityRole="button" onPress={leave} style={styles.leave}>
-              <Text style={[styles.leaveText, { color: palette.light }]}>Delete my account</Text>
-            </Pressable>
+            <View style={styles.links}>
+              <Pressable accessibilityRole="button" onPress={() => router.push("/recovery")} style={styles.leave}>
+                <Text style={[styles.leaveText, { color: palette.light }]}>Recovery code</Text>
+              </Pressable>
+              <Pressable accessibilityRole="button" onPress={leave} style={styles.leave}>
+                <Text style={[styles.leaveText, { color: palette.light }]}>Delete my account</Text>
+              </Pressable>
+            </View>
           </>
         )}
       </ScrollView>
@@ -369,9 +383,14 @@ const styles = StyleSheet.create({
     paddingVertical: 11,
     outlineWidth: 0,
   },
-  leave: {
+  links: {
+    flexDirection: "row",
+    gap: 18,
     marginTop: 20,
+  },
+  leave: {
     padding: 8,
+    alignSelf: "center",
   },
   leaveText: {
     fontSize: 13,

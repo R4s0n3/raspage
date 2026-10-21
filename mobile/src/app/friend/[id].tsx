@@ -1,9 +1,10 @@
 /*
  * A friend's water: their latest weather, alive. If they are here too, you
- * draw into the same water, each in your own colour.
+ * draw into the same water, each in your own colour. If they are not, what
+ * you draw is left for them as a stone, and replays when they next come.
  */
-import { router, useLocalSearchParams } from "expo-router";
-import { useEffect, useState } from "react";
+import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -12,8 +13,8 @@ import type { Visit } from "@/components/mood-html";
 import { Pill } from "@/components/Pill";
 import { getAccount } from "@/lib/account";
 import { describeDay } from "@/lib/dates";
-import { listFriends, type Friend } from "@/lib/friends";
-import { FALLBACK_PALETTE } from "@/lib/mood";
+import { leaveStone, listFriends, type Friend } from "@/lib/friends";
+import { FALLBACK_PALETTE, type Gesture } from "@/lib/mood";
 import { RELAY } from "@/lib/server";
 
 export default function FriendScreen() {
@@ -22,6 +23,27 @@ export default function FriendScreen() {
   const [friend, setFriend] = useState<Friend | null>(null);
   const [room, setRoom] = useState<Visit | null>(null);
   const [missing, setMissing] = useState(false);
+  // How many are in this water, you included: 2 or more means they are here.
+  const [peers, setPeers] = useState(1);
+  const touches = useRef<Gesture[]>([]);
+  const here = peers > 1;
+
+  // Leaving: what you drew while they were away goes to them as a stone.
+  useFocusEffect(
+    useCallback(
+      () => () => {
+        const left = touches.current;
+        touches.current = [];
+        if (friend && left.length) {
+          leaveStone(friend.id, left).catch(() => {});
+        }
+      },
+      [friend],
+    ),
+  );
+  const onGesture = useCallback((gesture: Gesture) => {
+    touches.current.push(gesture);
+  }, []);
 
   useEffect(() => {
     Promise.all([listFriends(), getAccount()])
@@ -41,14 +63,16 @@ export default function FriendScreen() {
   return (
     <View style={[styles.screen, { backgroundColor: palette.night }]}>
       {/* Made once the visit is known: the room is fixed when the page is built. */}
-      {friend && room && <MoodView mood={friend.mood} room={room} />}
+      {friend && room && (
+        <MoodView mood={friend.mood} room={room} onPeers={setPeers} record={!here} onGesture={onGesture} />
+      )}
 
       <View style={[styles.top, { paddingTop: insets.top + 12 }]} pointerEvents="box-none">
         <Pill label="Friends" palette={palette} onPress={() => router.back()} />
         {friend && (
           <Text style={[styles.title, { color: palette.light }]} numberOfLines={1}>
             {friend.name || "A friend"}
-            {friend.moodDate ? ` · ${describeDay(friend.moodDate)}` : ""}
+            {here ? " is here" : friend.moodDate ? ` · ${describeDay(friend.moodDate)}` : ""}
           </Text>
         )}
       </View>

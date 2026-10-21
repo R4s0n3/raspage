@@ -26,3 +26,9 @@ export const FALLBACK_PALETTE: Palette = {
   light: "#cfc8b2",
   glow: "#d9944f",
 };
+
+// A drop or a stroke in normalized 0..1 coordinates, with when it happened
+// (ms since the epoch while recording; ms from the start in a stone).
+export type Gesture =
+  | { t: "drop"; x: number; y: number; s: number; at: number }
+  | { t: "stroke"; x0: number; y0: number; x1: number; y1: number; s: number; at: number };

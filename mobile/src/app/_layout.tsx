@@ -21,6 +21,7 @@ export default function RootLayout() {
         <Stack.Screen name="friends" />
         <Stack.Screen name="friend/[id]" />
         <Stack.Screen name="invite/[code]" options={{ presentation: "modal", animation: "slide_from_bottom" }} />
+        <Stack.Screen name="recovery" options={{ presentation: "modal", animation: "slide_from_bottom" }} />
       </Stack>
     </>
   );

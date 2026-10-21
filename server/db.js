@@ -1,6 +1,7 @@
 /*
- * The database: accounts, friendships, invites and each person's latest
- * weather. Never diary entries: those stay on the phone.
+ * The database: accounts, friendships, invites, each person's latest
+ * weather, and stones waiting to be delivered. Never diary entries: those
+ * stay on the phone.
  *
  * Postgres, reached through DATABASE_URL (on Coolify, the internal URL of a
  * Postgres resource). The tables are created and updated on start by the
@@ -42,6 +43,18 @@ const MIGRATIONS = [
     CHECK (a < b)
   );
   CREATE INDEX friendships_b ON friendships (b);
+  `,
+  `
+  -- Touches left in a friend's water while they were away, waiting to be
+  -- replayed when they next open the app; deleted once delivered.
+  CREATE TABLE stones (
+    id bigserial PRIMARY KEY,
+    to_user uuid NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+    from_user uuid NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+    gestures jsonb NOT NULL,
+    created_at timestamptz NOT NULL DEFAULT now()
+  );
+  CREATE INDEX stones_to ON stones (to_user);
   `,
 ];
 

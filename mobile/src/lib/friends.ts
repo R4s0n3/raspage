@@ -4,7 +4,7 @@
  */
 import { asMe, getAccount } from "./account";
 import { diary } from "./diary";
-import type { Mood } from "./mood";
+import type { Gesture, Mood } from "./mood";
 import { request } from "./server";
 
 export type Friend = {
@@ -44,3 +44,36 @@ export const shareLatest = async () => {
 
 // Invite codes are read aloud and typed: XXXX-XXXX.
 export const formatCode = (code: string) => code.replace(/^(.{4})(.{4})$/, "$1-$2");
+
+export type Stone = {
+  from: { id: string; name: string | null };
+  gestures: Gesture[];
+  createdAt: string;
+};
+
+// Touches from a visit, made into a stone: times start at zero, and long
+// pauses shrink to a breath, so the whole visit replays in under two
+// minutes.
+export const toStone = (gestures: Gesture[]): Gesture[] => {
+  const sorted = [...gestures].sort((a, b) => a.at - b.at).slice(0, 400);
+  let clock = 0;
+  let last = sorted[0]?.at ?? 0;
+  return sorted
+    .map((g) => {
+      clock += Math.min(g.at - last, 1200);
+      last = g.at;
+      return { ...g, at: clock };
+    })
+    .filter((g) => g.at <= 120000);
+};
+
+export const leaveStone = (friendId: string, gestures: Gesture[]) =>
+  asMe(`/api/friends/${friendId}/stones`, { method: "POST", body: { gestures: toStone(gestures) } });
+
+// Stones left for you since you last looked. Reading them uses them up.
+export const collectStones = async (): Promise<Stone[]> => {
+  if (!(await getAccount())) {
+    return [];
+  }
+  return (await asMe<{ stones: Stone[] }>("/api/stones")).stones;
+};

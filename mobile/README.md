@@ -17,8 +17,10 @@ src/app/              screens (Expo Router)
   days.tsx            a month of days, each as its weather
   day/[date].tsx      one day again, and your words if you ask
   friends.tsx         your friends' weather, invites, your name, delete account
-  friend/[id].tsx     a friend's water, alive, drawn in together
+  friend/[id].tsx     a friend's water, alive, drawn in together; while they
+                      are away, what you draw is left as a stone
   invite/[code].tsx   an invite link, opened
+  recovery.tsx        your recovery code, or restoring an account with one
 src/components/
   MoodView.tsx        the engine in a WebView (MoodView.web.tsx: an iframe)
   Swatch.tsx          a day's weather in a few pixels
@@ -86,6 +88,47 @@ against strangers, not a secret.
 
 The web build (`w`) is for development: it runs the engine in an iframe and
 keeps the diary in localStorage.
+
+## Stones and recovery
+
+Drawing in a friend's water while they are away leaves a stone: the touches
+wait on the server (at most three from one friend, for a week) and replay in
+their water the next time they open the app, with a quiet "Mara was here".
+Delivered once, then gone.
+
+Your recovery code (Friends → Recovery code) is your account's key. On a new
+phone, Friends → "I have a recovery code" brings back your name and friends.
+The diary itself stays on the phone it was written on.
+
+## Building for TestFlight
+
+Everything is configured: the name, bundle ID `de.therascal.moodpage`,
+icons (`scripts/make-icons.py`), splash, invite links on the server's domain
+(`app.config.js`), and build profiles (`eas.json`, which points cloud builds
+at `https://the-rascal.de`). What needs your accounts:
+
+1. Enrol in the Apple Developer Program, then note your **Team ID**
+   (developer.apple.com → Account → Membership details).
+2. In App Store Connect, create the app: My Apps → + → New App, bundle ID
+   `de.therascal.moodpage` (register it when asked), name `moodpage`.
+3. On Coolify, set `APPLE_TEAM_ID=<Team ID>` and redeploy; check that
+   `https://the-rascal.de/.well-known/apple-app-site-association` shows it.
+   Set `MOODPAGE_CONTACT` too, for the privacy page.
+4. From `mobile/`:
+   ```bash
+   npx eas-cli@latest login            # your Expo account
+   npx eas-cli@latest init             # links this app to an EAS project
+   npx eas-cli@latest build -p ios --profile production
+   npx eas-cli@latest submit -p ios --latest
+   ```
+   EAS creates the certificates and provisioning profile for you when asked
+   to log in to your Apple account.
+5. In App Store Connect → TestFlight, add yourself and your friends as
+   testers. With a public link, set it on Coolify as `APP_INSTALL_URL`.
+   The privacy policy URL is `https://the-rascal.de/privacy`.
+
+While developing, keep using Expo Go (`npx expo start --lan`): invite
+links then open Expo Go, and the code can always be typed in by hand.
 
 ## Checks
 

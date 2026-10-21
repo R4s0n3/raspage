@@ -30,6 +30,7 @@ const { createTranslator, TranslationError, MAX_ENTRY } = require("./translate")
 const { clampMood } = require("./mood-schema");
 const { createDb } = require("./db");
 const { createAccounts } = require("./accounts");
+const { createLinks } = require("./links");
 const {
   HttpError,
   sendJson,
@@ -69,6 +70,8 @@ const db = process.env.DATABASE_URL ? createDb(process.env.DATABASE_URL) : null;
 const accounts = db
   ? createAccounts({ db, clampMood, base: translator.base })
   : null;
+// Invite pages, the privacy policy, and the files that let links open the app.
+const links = createLinks({ db });
 const INDEX_META =
   /(<meta\s+name="moodpage-ws"\s+content=")([^"]*)(")/i;
 
@@ -342,7 +345,20 @@ const server = http.createServer((request, response) => {
     });
     return;
   }
-  serveStatic(request, response);
+  links
+    .handle(request, response, pathname)
+    .then((handled) => {
+      if (!handled) {
+        serveStatic(request, response);
+      }
+    })
+    .catch((error) => {
+      console.error("page error:", error.code || error.message);
+      if (!response.headersSent) {
+        response.writeHead(500, { "content-type": "text/plain" });
+        response.end("moodpage");
+      }
+    });
 });
 const wss = new WebSocketServer({ server });
 

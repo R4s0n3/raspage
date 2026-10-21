@@ -103,3 +103,28 @@ export const deleteAccount = async () => {
   }
   await store(null);
 };
+
+// The recovery code is the account's own key, grouped for reading. Keep it
+// somewhere safe: whoever has it is you.
+export const recoveryCode = (account: Account) => account.token.replace(/(.{5})(?=.)/g, "$1 ");
+
+// Brings an account back on this phone from its recovery code. An unnamed
+// account made here in the meantime (by a first entry) is let go.
+export const restoreAccount = async (code: string) => {
+  const token = code.replace(/\s+/g, "");
+  if (token.length < 20) {
+    throw new ServerError(400, "that doesn't look like a recovery code");
+  }
+  const me = await request<{ id: string; name: string | null }>("/api/me", { token }).catch((error) => {
+    if (error instanceof ServerError && error.status === 401) {
+      throw new ServerError(401, "no account has that recovery code");
+    }
+    throw error;
+  });
+  const current = await getAccount();
+  if (current && current.token !== token && !current.name) {
+    await request("/api/me", { method: "DELETE", token: current.token }).catch(() => {});
+  }
+  await store({ id: me.id, token, name: me.name });
+  return me;
+};

@@ -1,5 +1,7 @@
 import { ENGINE_HTML } from "@/engine/engine-html";
-import type { Mood } from "@/lib/mood";
+import type { Gesture, Mood } from "@/lib/mood";
+
+export type { Gesture } from "@/lib/mood";
 
 // Someone's own water on the relay, which lets in only them and their
 // friends.
@@ -19,11 +21,22 @@ export type MoodViewProps = {
   paused?: boolean;
   // Draw together in someone's water. Fixed when the view is made.
   room?: Visit | null;
+  // How many are in the shared water, you included.
+  onPeers?: (count: number) => void;
+  // While true, each of your touches is handed to onGesture (for stones).
+  record?: boolean;
+  onGesture?: (gesture: Gesture) => void;
+  // Touches to play back; a new id plays a new replay.
+  replay?: Replay | null;
 };
+
+export type Replay = { id: string; gestures: Gesture[]; slot?: number };
 
 // What the engine page says back (src/engine/host.js and log.js).
 export type PageMessage =
   | { type: "ready" }
+  | { type: "peers"; count: number }
+  | { type: "gesture"; gesture: Gesture }
   | { type: "log"; level: "error" | "warn" | "info"; message: string };
 
 // The page's own log lines, in the app's log while developing.

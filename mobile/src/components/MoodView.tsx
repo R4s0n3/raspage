@@ -10,9 +10,20 @@ import { WebView, type WebViewMessageEvent } from "react-native-webview";
 import { FALLBACK_PALETTE } from "@/lib/mood";
 import { logFromPage, moodHtml, type MoodViewProps, type PageMessage } from "./mood-html";
 
-export function MoodView({ mood, paused = false, room = null }: MoodViewProps) {
+export function MoodView({
+  mood,
+  paused = false,
+  room = null,
+  onPeers,
+  record = false,
+  onGesture,
+  replay = null,
+}: MoodViewProps) {
   const ref = useRef<ComponentRef<typeof WebView>>(null);
   const [ready, setReady] = useState(false);
+  // The latest callbacks, for the page's messages to reach.
+  const handlers = useRef({ onPeers, onGesture });
+  handlers.current = { onPeers, onGesture };
   const [key, setKey] = useState(0);
 
   // Only the first mood is baked into the page; the rest arrive as messages.
@@ -38,11 +49,29 @@ export function MoodView({ mood, paused = false, room = null }: MoodViewProps) {
     }
   }, [ready, paused]);
 
+  useEffect(() => {
+    if (ready) {
+      send({ type: "record", on: record });
+    }
+  }, [ready, record]);
+
+  useEffect(() => {
+    if (ready && replay) {
+      send({ type: "replay", gestures: replay.gestures, slot: replay.slot ?? 1 });
+    }
+    // A replay plays once, when its id is new.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ready, replay?.id]);
+
   const onMessage = (event: WebViewMessageEvent) => {
     try {
       const message: PageMessage = JSON.parse(event.nativeEvent.data);
       if (message?.type === "ready") {
         setReady(true);
+      } else if (message?.type === "peers") {
+        handlers.current.onPeers?.(message.count);
+      } else if (message?.type === "gesture") {
+        handlers.current.onGesture?.(message.gesture);
       }
       logFromPage(message);
     } catch {
