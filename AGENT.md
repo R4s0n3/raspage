@@ -163,8 +163,11 @@ sound.js            synthesised ambience: water, air, drips, touch
 moodpage.js         MOODPAGE.create(): one moodpage in one element
 main.js             the site: today's mood, full screen, title, room
 examples/embed.html developer page: two moodpages, setMood/pause/destroy
-server.js           Node app: static site + room relay on one origin
-package.json        the relay's only dependency (`ws`)
+server.js           Node app: static site + room relay + /api/mood
+translate.js        diary entry → mood with Claude, for the app
+mood-schema.js      every translatable field and its range; clamps moods
+mobile/             the Expo app (its own README)
+package.json        the server's dependencies (`ws`, `@anthropic-ai/sdk`)
 favicon.svg         small static mark
 journal/            one atmospheric log per day
 AGENT.md            this file
@@ -470,10 +473,18 @@ derive positions from a loop that restarts. Both engines scale time for
 `prefers-reduced-motion`. When a tab is hidden, RAF stops; on return the
 simulation continues rather than jumping.
 
+### Adding a mood field
+
+The app's translator (`translate.js`) reads this guide's "Translating a diary
+entry" and "Field guide" sections as its instructions, so keep them accurate:
+what is written there is what every app user's weather is made from. A new
+field also goes into `mood-schema.js` with its comfortable range; anything
+not listed there always comes from today's `mood.js`.
+
 ### Adding a shader uniform
 
 1. Add the uniform to `shader.js` and use it.
-2. Add the field to `mood.js`.
+2. Add the field to `mood.js` (and `mood-schema.js`, see above).
 3. Wire it in `applyMood()` in `app.js` with `set("u_name", ...)`.
 4. Test that the whole page still compiles: a missing uniform is silently
    ignored by the helper, but a typo will quietly do nothing.

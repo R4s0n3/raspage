@@ -23,6 +23,7 @@ const http = require("http");
 const path = require("path");
 const crypto = require("crypto");
 const { WebSocketServer, WebSocket } = require("ws");
+const { createTranslator, TranslationError, MAX_ENTRY } = require("./translate");
 
 const PORT = Number(process.env.PORT) || 8787;
 const MAX_PER_ROOM = Math.max(2, Number(process.env.MAX_PER_ROOM) || 5);
@@ -30,6 +31,16 @@ const MAX_ROOMS = 400;
 const MESSAGE_LIMIT = 120; // messages per second, per client
 
 const STATIC_ROOT = path.resolve(__dirname);
+
+// POST /api/mood: a diary entry in, a mood out (translate.js). Off unless
+// Claude credentials are configured. MOODPAGE_APP_TOKEN, when set, is a
+// shared secret the app must send as a bearer token.
+const TRANSLATE_ENABLED = Boolean(
+  process.env.ANTHROPIC_API_KEY || process.env.ANTHROPIC_AUTH_TOKEN,
+);
+const APP_TOKEN = process.env.MOODPAGE_APP_TOKEN || "";
+const TRANSLATIONS_PER_HOUR = Number(process.env.TRANSLATIONS_PER_HOUR) || 20;
+const translator = createTranslator({ root: STATIC_ROOT });
 const INDEX_META =
   /(<meta\s+name="moodpage-ws"\s+content=")([^"]*)(")/i;
 
@@ -199,8 +210,15 @@ const serveStatic = (request, response) => {
     filePath === STATIC_ROOT || filePath.startsWith(STATIC_ROOT + path.sep);
   const segments = filePath.split(path.sep);
 
-  // Never serve the diary's private drawer or the repository itself.
-  if (!insideRoot || segments.includes("private") || segments.includes(".git")) {
+  // Never serve the diary's private drawer, the repository itself, its
+  // dependencies, or the app's source.
+  if (
+    !insideRoot ||
+    segments.includes("private") ||
+    segments.includes(".git") ||
+    segments.includes("node_modules") ||
+    segments.includes("mobile")
+  ) {
     response.writeHead(404, { "content-type": "text/plain" });
     response.end("moodpage");
     return;
@@ -216,7 +234,101 @@ const serveStatic = (request, response) => {
   });
 };
 
-const server = http.createServer(serveStatic);
+// Translations per address in the current hour. Only counts are kept.
+const translationCounts = new Map();
+setInterval(() => translationCounts.clear(), 60 * 60 * 1000).unref();
+
+const sendJson = (response, status, body) => {
+  const payload = JSON.stringify(body);
+  response.writeHead(status, {
+    "content-type": "application/json; charset=utf-8",
+    "content-length": Buffer.byteLength(payload),
+    "cache-control": "no-store",
+    "access-control-allow-origin": "*",
+  });
+  response.end(payload);
+};
+
+const readBody = (request, limit) =>
+  new Promise((resolve, reject) => {
+    let size = 0;
+    const chunks = [];
+    request.on("data", (chunk) => {
+      size += chunk.length;
+      if (size > limit) {
+        reject(new TranslationError("entry too long", 413));
+        request.destroy();
+        return;
+      }
+      chunks.push(chunk);
+    });
+    request.on("end", () => resolve(Buffer.concat(chunks).toString("utf8")));
+    request.on("error", reject);
+  });
+
+const serveMood = async (request, response) => {
+  if (request.method === "OPTIONS") {
+    response.writeHead(204, {
+      "access-control-allow-origin": "*",
+      "access-control-allow-methods": "POST, OPTIONS",
+      "access-control-allow-headers": "content-type, authorization",
+      "access-control-max-age": "86400",
+    });
+    response.end();
+    return;
+  }
+  if (request.method !== "POST") {
+    sendJson(response, 405, { error: "POST a diary entry" });
+    return;
+  }
+  if (!TRANSLATE_ENABLED) {
+    sendJson(response, 503, { error: "translation is not configured" });
+    return;
+  }
+  if (APP_TOKEN && request.headers.authorization !== "Bearer " + APP_TOKEN) {
+    sendJson(response, 401, { error: "unauthorized" });
+    return;
+  }
+
+  const address =
+    String(request.headers["x-forwarded-for"] || "").split(",")[0].trim() ||
+    request.socket.remoteAddress;
+  const count = (translationCounts.get(address) || 0) + 1;
+  translationCounts.set(address, count);
+  if (count > TRANSLATIONS_PER_HOUR) {
+    sendJson(response, 429, { error: "too many entries this hour" });
+    return;
+  }
+
+  // The entry is held only for the length of this request: never logged,
+  // never written anywhere.
+  try {
+    const body = JSON.parse(await readBody(request, MAX_ENTRY * 4 + 1024));
+    const date =
+      typeof body.date === "string" && /^\d{4}-\d{2}-\d{2}$/.test(body.date)
+        ? body.date
+        : null;
+    const mood = await translator.translate(body.entry, date);
+    sendJson(response, 200, { mood });
+  } catch (error) {
+    if (error instanceof SyntaxError) {
+      sendJson(response, 400, { error: "send JSON: { entry, date }" });
+    } else if (error instanceof TranslationError) {
+      sendJson(response, error.status, { error: error.message });
+    } else {
+      console.error("translation failed:", error?.status || "", error?.name || "error");
+      sendJson(response, 502, { error: "the weather could not be made" });
+    }
+  }
+};
+
+const server = http.createServer((request, response) => {
+  if (request.url === "/api/mood" || request.url.startsWith("/api/mood?")) {
+    serveMood(request, response);
+    return;
+  }
+  serveStatic(request, response);
+});
 const wss = new WebSocketServer({ server });
 
 wss.on("connection", (client) => {
