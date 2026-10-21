@@ -10,7 +10,7 @@ import { WebView, type WebViewMessageEvent } from "react-native-webview";
 import { FALLBACK_PALETTE } from "@/lib/mood";
 import { logFromPage, moodHtml, type MoodViewProps, type PageMessage } from "./mood-html";
 
-export function MoodView({ mood, paused = false }: MoodViewProps) {
+export function MoodView({ mood, paused = false, room = null }: MoodViewProps) {
   const ref = useRef<ComponentRef<typeof WebView>>(null);
   const [ready, setReady] = useState(false);
   const [key, setKey] = useState(0);
@@ -18,7 +18,7 @@ export function MoodView({ mood, paused = false }: MoodViewProps) {
   // Only the first mood is baked into the page; the rest arrive as messages.
   const firstMood = useRef(mood);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  const html = useMemo(() => moodHtml(firstMood.current), [key]);
+  const html = useMemo(() => moodHtml(firstMood.current, room), [key]);
 
   const send = (message: object) => {
     ref.current?.injectJavaScript(

@@ -22,6 +22,7 @@ import { Pill } from "@/components/Pill";
 import { translateEntry, TranslateError } from "@/lib/api";
 import { dayKey, formatDay } from "@/lib/dates";
 import { diary } from "@/lib/diary";
+import { shareMood } from "@/lib/friends";
 import { FALLBACK_PALETTE } from "@/lib/mood";
 
 const MAX_ENTRY = 6000;
@@ -55,6 +56,8 @@ export default function Write() {
     try {
       const mood = await translateEntry(words, date);
       await diary.saveDay({ date, entry: words, mood, createdAt: Date.now() });
+      // Friends see the new weather; if that fails they see it next time.
+      shareMood(mood, date).catch(() => {});
       router.back();
     } catch (caught) {
       setError(caught instanceof TranslateError ? caught.message : "Something went wrong. Try again.");
@@ -89,7 +92,8 @@ export default function Write() {
       <View style={[styles.footer, { paddingBottom: insets.bottom + 16 }]}>
         {error && <Text style={[styles.error, { color: palette.glow }]}>{error}</Text>}
         <Text style={[styles.note, { color: palette.light }]}>
-          Your words stay on this phone. They are sent once to make the weather and are not kept anywhere else.
+          Your words stay on this phone. They are sent once to make the weather and are not kept anywhere else. Only
+          the weather is shared with your friends.
         </Text>
         {busy ? (
           <View style={styles.busy}>

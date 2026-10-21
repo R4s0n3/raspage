@@ -46,7 +46,7 @@ ${read(path.join(root, "styles.css"))}
 <script>
 ${inline(read(path.join(app, "src/engine/log.js")))}
 </script>
-<script>window.__MOODPAGE_MOOD = /*__MOOD__*/null;</script>
+<script>window.__MOODPAGE_MOOD = /*__MOOD__*/null; window.__MOODPAGE_ROOM = /*__ROOM__*/null;</script>
 ${SCRIPTS.map((file) => `<script>\n${inline(read(path.join(root, file)))}\n</script>`).join("\n")}
 <script>
 ${inline(read(path.join(app, "src/engine/host.js")))}

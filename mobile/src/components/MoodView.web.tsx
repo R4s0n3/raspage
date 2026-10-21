@@ -8,12 +8,12 @@ import { StyleSheet, View } from "react-native";
 import { FALLBACK_PALETTE } from "@/lib/mood";
 import { logFromPage, moodHtml, type MoodViewProps, type PageMessage } from "./mood-html";
 
-export function MoodView({ mood, paused = false }: MoodViewProps) {
+export function MoodView({ mood, paused = false, room = null }: MoodViewProps) {
   const frame = useRef<HTMLIFrameElement>(null);
   const [ready, setReady] = useState(false);
 
   const firstMood = useRef(mood);
-  const html = useMemo(() => moodHtml(firstMood.current), []);
+  const html = useMemo(() => moodHtml(firstMood.current, room), []);
 
   const send = (message: object) => {
     frame.current?.contentWindow?.postMessage(JSON.stringify(message), "*");

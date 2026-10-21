@@ -4,6 +4,8 @@
  *
  * The app writes the first mood into the page before it loads
  * (window.__MOODPAGE_MOOD); without one, the bundled mood.js is the weather.
+ * When the page is someone's water, window.__MOODPAGE_ROOM holds the relay
+ * and the visit ({ url, visit, token }); friends there draw together.
  * After that the app sends small messages:
  *
  *   { type: "mood", mood }    change the weather in place
@@ -21,8 +23,12 @@
   const log = window.__moodpageLog;
 
   const stage = document.querySelector(".stage");
+  const room = window.__MOODPAGE_ROOM;
   const page = window.MOODPAGE.create(stage, {
     mood: window.__MOODPAGE_MOOD || window.MOOD,
+    room: room
+      ? { url: room.url, join: { visit: room.visit, token: room.token } }
+      : null,
   });
   if (!page) {
     log("error", ["the moodpage could not start"]);

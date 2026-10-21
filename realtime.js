@@ -5,9 +5,11 @@
  * five people share a room, and every drop or stroke is relayed to the others
  * through the small WebSocket relay in server.js.
  *
- * MOODPAGE.connectRoom(water, { url, room }) joins one water surface to a
- * relay. Without a room code the relay places a visitor with whoever else is
- * there. Which relay and which room is the page's decision (see main.js); an
+ * MOODPAGE.connectRoom(water, { url, room, join }) joins one water surface
+ * to a relay. Without a room code the relay places a visitor with whoever
+ * else is there. `join` adds fields to the join message: the app's
+ * { visit, token } asks for a friend's own water, which the relay only
+ * opens to friends. Which relay and which room is the page's decision (see main.js); an
  * app shell passes its own.
  */
 (() => {
@@ -28,6 +30,7 @@
       return null;
     }
     const requestedRoom = MOODPAGE.roomCode(options.room);
+    const extra = options.join && typeof options.join === "object" ? options.join : {};
 
     let socket = null;
     let retry = 0;
@@ -89,6 +92,9 @@
       } else if (message.t === "full") {
         // The named room is full. Wait quietly and try again.
         retryAt = Date.now() + 15000;
+      } else if (message.t === "denied") {
+        // Not allowed in (no longer friends): stay alone, stop asking.
+        closed = true;
       } else if (message.t === "busy") {
         retryAt = Date.now() + 30000;
       }
@@ -136,7 +142,7 @@
 
       socket.addEventListener("open", () => {
         retry = 0;
-        socket.send(JSON.stringify({ t: "join", room: requestedRoom }));
+        socket.send(JSON.stringify({ ...extra, t: "join", room: requestedRoom }));
       });
 
       socket.addEventListener("message", onMessage);

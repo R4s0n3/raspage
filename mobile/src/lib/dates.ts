@@ -22,3 +22,16 @@ export const formatMonth = (year: number, month: number) =>
     month: "long",
     year: "numeric",
   });
+
+// "today", "yesterday", or the date, for a friend's latest weather.
+export const describeDay = (key: string) => {
+  const today = dayKey();
+  const yesterday = dayKey(new Date(Date.now() - 24 * 60 * 60 * 1000));
+  if (key === today) {
+    return "today";
+  }
+  if (key === yesterday) {
+    return "yesterday";
+  }
+  return parseDay(key).toLocaleDateString(undefined, { day: "numeric", month: "short" });
+};
