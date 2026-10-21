@@ -80,14 +80,17 @@ words are paraphrased so the public repository never becomes a public diary.
 
 ```
 index.html          full-screen stage
-styles.css          layout, CSS fallback, veil and grain
+styles.css          .moodpage layers, CSS fallback, veil and grain
 mood.js             the current mood (edited daily)
-interaction.js      water height field, pointer and touch
 shader.js           WebGL atmosphere
-app.js              renderer, timing, water texture
+interaction.js      water height field, pointer and touch
+app.js              sky renderer, timing, water texture
 motes.js            2D layer of light streams and dust
 realtime.js         shared room client
 sound.js            soft, synthesised water-and-air ambience
+moodpage.js         MOODPAGE.create(): one moodpage in any element
+main.js             the site: today's mood, full screen
+examples/           a developer page with two moodpages side by side
 server.js           Node app: static site + room relay on one origin
 package.json        the relay's only dependency (`ws`)
 journal/            dated, non-identifying mood logs
@@ -109,6 +112,24 @@ different screen. It stores nothing and keeps at most five clients per room.
 `server.js` serves the static site and the relay on the same origin and fills
 the `moodpage-ws` meta tag at runtime; on any other static host the meta stays
 empty and the page runs solo.
+
+## Embedding
+
+The engine is not tied to the page. Load the scripts (everything from
+`shader.js` to `moodpage.js`, plus `styles.css`) and give it an element and a
+mood:
+
+```js
+const page = MOODPAGE.create(element, { mood });
+page.setMood(otherMood); // the weather changes in place
+page.pause();            // off screen, app in the background
+page.destroy();          // frees the WebGL context and the audio
+```
+
+A mood is plain data in the shape of `mood.js`, so it can come from JSON. Several
+moodpages can share a screen; see [`examples/embed.html`](examples/embed.html)
+(served by either command above, at `/examples/embed.html`). The site itself
+is one of these, made by `main.js` and kept on `window.moodpage`.
 
 ## Publishing
 

@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>moodpage · embedding</title>
+    <link rel="stylesheet" href="../styles.css" />
+    <style>
+      /* A developer page, not part of the site: two moodpages side by side,
+         the way an app might show a friend's weather next to yours. */
+      body {
+        overflow: auto;
+        display: grid;
+        gap: 16px;
+        padding: 16px;
+        font: 14px system-ui, sans-serif;
+        color: #ccc;
+        user-select: auto;
+      }
+      .row {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+        gap: 16px;
+      }
+      .card {
+        height: 420px;
+        border-radius: 24px;
+      }
+      button {
+        font: inherit;
+        padding: 6px 12px;
+      }
+    </style>
+  </head>
+  <body>
+    <div>
+      <button data-swap>swap the two moods</button>
+      <button data-pause>pause / resume the second</button>
+      <button data-destroy>destroy / recreate the second</button>
+    </div>
+    <div class="row">
+      <div class="card" data-a></div>
+      <div class="card" data-b></div>
+    </div>
+
+    <script src="../mood.js"></script>
+    <script src="../shader.js"></script>
+    <script src="../interaction.js"></script>
+    <script src="../app.js"></script>
+    <script src="../motes.js"></script>
+    <script src="../realtime.js"></script>
+    <script src="../sound.js"></script>
+    <script src="../moodpage.js"></script>
+    <script>
+      // A second weather, as an app would receive it: plain JSON.
+      const clear = JSON.parse(JSON.stringify(window.MOOD));
+      Object.assign(clear, { title: "Clear Morning" });
+      clear.palette = {
+        night: "#0b1622",
+        deep: "#24425e",
+        haze: "#7fa6c4",
+        light: "#eef4f2",
+        glow: "#ffe2a8",
+      };
+      clear.composition = {
+        ...clear.composition,
+        cloudCover: 0.3,
+        lightX: 0.4,
+        lightY: 0.3,
+        lightIntensity: 1.1,
+      };
+      clear.life = { ...clear.life, creatures: 6, shy: 0, curiosity: 0.8 };
+      clear.motion = { ...clear.motion, speed: 0.4 };
+
+      const a = MOODPAGE.create(document.querySelector("[data-a]"), {
+        mood: window.MOOD,
+      });
+      let b = MOODPAGE.create(document.querySelector("[data-b]"), {
+        mood: clear,
+        sound: false,
+      });
+      let paused = false;
+
+      document.querySelector("[data-swap]").onclick = () => {
+        const first = a.mood;
+        a.setMood(b.mood);
+        b.setMood(first);
+      };
+      document.querySelector("[data-pause]").onclick = () => {
+        paused = !paused;
+        paused ? b.pause() : b.resume();
+      };
+      document.querySelector("[data-destroy]").onclick = () => {
+        if (b) {
+          b.destroy();
+          b = null;
+        } else {
+          b = MOODPAGE.create(document.querySelector("[data-b]"), {
+            mood: clear,
+            sound: false,
+          });
+        }
+      };
+      window.pages = { a, get b() { return b; } };
+    </script>
+  </body>
+</html>

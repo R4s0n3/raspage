@@ -152,14 +152,17 @@ them. Choose one dominant feeling, one supporting colour, and one surprise.
 
 ```
 index.html          page shell, hidden accessibility text
-styles.css          full-bleed layout, CSS fallback, veil + grain
+styles.css          .moodpage layers, CSS fallback, veil + grain
 mood.js             THE CURRENT MOOD — edit this each day
-interaction.js      water height field, pointer/touch, motion scaling
 shader.js           WebGL atmosphere: clouds, light, shader dust
-app.js              WebGL setup, water texture, motion/time
+interaction.js      water height field, pointer/touch, motion scaling
+app.js              the sky renderer: WebGL setup, water texture, time
 motes.js            2D layer: long light streams, dust, bokeh
 realtime.js         shared room client (optional, needs server.js)
 sound.js            synthesised ambience: water, air, drips, touch
+moodpage.js         MOODPAGE.create(): one moodpage in one element
+main.js             the site: today's mood, full screen, title, room
+examples/embed.html developer page: two moodpages, setMood/pause/destroy
 server.js           Node app: static site + room relay on one origin
 package.json        the relay's only dependency (`ws`)
 favicon.svg         small static mark
@@ -168,10 +171,32 @@ AGENT.md            this file
 README.md           human-facing overview and run instructions
 ```
 
-The page loads seven classic scripts in this order: `mood.js`, `interaction.js`,
-`shader.js`, `app.js`, `motes.js`, `realtime.js`, then `sound.js`. No bundler and no server
-code are required for the page itself; `realtime.js` and `server.js` only power
-the shared rooms.
+The page loads nine classic scripts in this order: `mood.js`, `shader.js`,
+`interaction.js`, `app.js`, `motes.js`, `realtime.js`, `sound.js`,
+`moodpage.js`, then `main.js`. No bundler and no server code are required for
+the page itself; `realtime.js` and `server.js` only power the shared rooms.
+
+### The engine is embeddable
+
+Nothing in the engine reads `window.MOOD` or the window size. Each module
+registers a factory on `window.MOODPAGE` (`createWater`, `createSky`,
+`createMotes`, `createSound`, `connectRoom`), and `moodpage.js` composes them:
+
+```js
+const page = MOODPAGE.create(element, { mood, interactive, sound, room });
+page.setMood(next);   // in place: the clouds keep moving through the change
+page.addDrop(x, y);   // a stone from elsewhere, normalized 0..1
+page.pause(); page.resume(); page.destroy();
+```
+
+The element fills with its own canvases and veil and gets the palette as CSS
+variables; pointers are read relative to it. `main.js` is the only file that
+touches the document as a whole (title, description, theme colour, relay
+URL, `?room=`) and keeps the site's instance on `window.moodpage`. A mood is
+plain data, so the same shape can arrive as JSON from anywhere. Phones allow
+only a handful of WebGL contexts: `destroy()` releases its context at once.
+Keep the site behaving exactly as before when you change the engine, and
+check `examples/embed.html` still runs two side by side.
 
 ### How the layers work
 
@@ -216,8 +241,9 @@ the shared rooms.
   soft limiter finish it. Texture is scheduled slightly ahead on the audio
   clock, and short voices are capped and cleaned up.
 
-The visual layers pause when the tab is hidden and resume without a time jump.
-The interaction module also stops accumulating while hidden.
+The visual layers pause when the tab is hidden (or when the host calls
+`pause()`) and resume without a time jump. The interaction module also stops
+accumulating while paused.
 
 ---
 
@@ -448,7 +474,7 @@ simulation continues rather than jumping.
 
 1. Add the uniform to `shader.js` and use it.
 2. Add the field to `mood.js`.
-3. Wire it in `app.js` with `set("u_name", ...)`.
+3. Wire it in `applyMood()` in `app.js` with `set("u_name", ...)`.
 4. Test that the whole page still compiles: a missing uniform is silently
    ignored by the helper, but a typo will quietly do nothing.
 5. Update this guide.
@@ -476,8 +502,8 @@ point, and their relay messages are spaced out so a whole hand stays within the
 server's message limit. The height field is stepped at a fixed 60 Hz
 with an accumulator, encoded into a small RGBA texture each frame, and read by
 the shader (cloud warp and crest light) and by `motes.js` (slope push on the
-streams). The canvas keeps `touch-action: none` so a drag never scrolls the
-page. Do not add a second interaction layer on top; extend the water fields in
+streams). The `.moodpage` element keeps `touch-action: none` so a drag never
+scrolls the page. Do not add a second interaction layer on top; extend the water fields in
 `mood.js` instead, with new config fields.
 
 ### Shared rooms

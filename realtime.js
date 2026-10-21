@@ -3,206 +3,197 @@
  *
  * moodpage stays wordless: the room is the link you already have open. Up to
  * five people share a room, and every drop or stroke is relayed to the others
- * through the small WebSocket relay in server.js. Without a ?room= code the
- * relay places a visitor with whoever else is there. The relay fills the
- * moodpage-ws meta tag with the page's own origin at runtime; without it the
- * page runs alone, exactly as before.
+ * through the small WebSocket relay in server.js.
+ *
+ * MOODPAGE.connectRoom(water, { url, room }) joins one water surface to a
+ * relay. Without a room code the relay places a visitor with whoever else is
+ * there. Which relay and which room is the page's decision (see main.js); an
+ * app shell passes its own.
  */
 (() => {
   "use strict";
 
-  const interaction = window.MOODPAGE_INTERACTION;
-  if (!interaction) {
-    return;
-  }
+  const MOODPAGE = (window.MOODPAGE = window.MOODPAGE || {});
 
-  const meta = document.querySelector('meta[name="moodpage-ws"]');
-  let url = (meta?.getAttribute("content") || "").trim();
+  // Room codes are short and plain: letters, digits, _ and -.
+  MOODPAGE.roomCode = (value) =>
+    String(value || "")
+      .toLowerCase()
+      .replace(/[^a-z0-9_-]/g, "")
+      .slice(0, 16) || null;
 
-  let params = null;
-  try {
-    params = new URLSearchParams(window.location.search);
-  } catch {
-    params = null;
-  }
-
-  // ?ws=... is a development override for a relay on another host, e.g. a
-  // phone testing against a laptop on the same network.
-  const override = params?.get("ws")?.trim();
-  if (override && /^wss?:\/\//i.test(override)) {
-    url = override;
-  }
-
-  if (!url) {
-    const local =
-      window.location.hostname === "localhost" ||
-      window.location.hostname === "127.0.0.1";
-    // Only reach for a local relay when a room was explicitly requested;
-    // a plain local page should stay silent if no relay is running.
-    if (local && params?.has("room")) {
-      url = "ws://" + window.location.hostname + ":8787";
-    } else {
-      return;
+  MOODPAGE.connectRoom = (interaction, options = {}) => {
+    const url = String(options.url || "").trim();
+    if (!interaction || !/^wss?:\/\//i.test(url)) {
+      return null;
     }
-  }
+    const requestedRoom = MOODPAGE.roomCode(options.room);
 
-  let requestedRoom = null;
-  try {
-    requestedRoom = new URLSearchParams(window.location.search).get("room");
-  } catch {
-    requestedRoom = null;
-  }
-  if (requestedRoom) {
-    requestedRoom =
-      requestedRoom.toLowerCase().replace(/[^a-z0-9_-]/g, "").slice(0, 16) ||
-      null;
-  }
+    let socket = null;
+    let retry = 0;
+    let timer = 0;
+    let retryAt = 0;
+    let paused = false;
+    let closed = false;
 
-  let socket = null;
-  let retry = 0;
-  let timer = 0;
-  let retryAt = 0;
+    const valid = (value, min, max) =>
+      typeof value === "number" &&
+      Number.isFinite(value) &&
+      value >= min &&
+      value <= max;
 
-  const valid = (value, min, max) =>
-    typeof value === "number" &&
-    Number.isFinite(value) &&
-    value >= min &&
-    value <= max;
-
-  const onMessage = (event) => {
-    let message = null;
-    try {
-      message = JSON.parse(event.data);
-    } catch {
-      return;
-    }
-
-    if (!message || typeof message.t !== "string") {
-      return;
-    }
-
-    // The colour slot of whoever drew it; the relay stamps it on.
-    const slot = Number.isInteger(message.c) && message.c >= 0 ? message.c : 0;
-
-    if (message.t === "welcome") {
-      if (Number.isInteger(message.slot) && message.slot >= 0) {
-        interaction.state.slot = message.slot;
+    const onMessage = (event) => {
+      let message = null;
+      try {
+        message = JSON.parse(event.data);
+      } catch {
+        return;
       }
-    } else if (message.t === "drop") {
-      if (valid(message.x, 0, 1) && valid(message.y, 0, 1)) {
-        interaction.addDrop(
-          message.x,
-          message.y,
-          valid(message.s, 0, 1) ? message.s : 1,
-          slot,
-        );
+
+      if (!message || typeof message.t !== "string") {
+        return;
       }
-    } else if (message.t === "stroke") {
+
+      // The colour slot of whoever drew it; the relay stamps it on.
+      const slot = Number.isInteger(message.c) && message.c >= 0 ? message.c : 0;
+
+      if (message.t === "welcome") {
+        if (Number.isInteger(message.slot) && message.slot >= 0) {
+          interaction.state.slot = message.slot;
+        }
+      } else if (message.t === "drop") {
+        if (valid(message.x, 0, 1) && valid(message.y, 0, 1)) {
+          interaction.addDrop(
+            message.x,
+            message.y,
+            valid(message.s, 0, 1) ? message.s : 1,
+            slot,
+          );
+        }
+      } else if (message.t === "stroke") {
+        if (
+          valid(message.x0, 0, 1) &&
+          valid(message.y0, 0, 1) &&
+          valid(message.x1, 0, 1) &&
+          valid(message.y1, 0, 1)
+        ) {
+          interaction.addStroke(
+            message.x0,
+            message.y0,
+            message.x1,
+            message.y1,
+            valid(message.s, 0, 1) ? message.s : 1,
+            slot,
+          );
+        }
+      } else if (message.t === "full") {
+        // The named room is full. Wait quietly and try again.
+        retryAt = Date.now() + 15000;
+      } else if (message.t === "busy") {
+        retryAt = Date.now() + 30000;
+      }
+    };
+
+    const schedule = () => {
+      if (paused || closed || timer) {
+        return;
+      }
+
+      const wait = Math.max(0, retryAt - Date.now());
+      retryAt = 0;
+      const backoff = wait
+        ? wait
+        : Math.min(15000, 1000 * Math.pow(2, Math.min(retry, 4)));
+      if (!wait) {
+        retry += 1;
+      }
+
+      timer = window.setTimeout(() => {
+        timer = 0;
+        connect();
+      }, backoff);
+    };
+
+    const connect = () => {
+      if (paused || closed) {
+        return;
+      }
       if (
-        valid(message.x0, 0, 1) &&
-        valid(message.y0, 0, 1) &&
-        valid(message.x1, 0, 1) &&
-        valid(message.y1, 0, 1)
+        socket &&
+        (socket.readyState === WebSocket.OPEN ||
+          socket.readyState === WebSocket.CONNECTING)
       ) {
-        interaction.addStroke(
-          message.x0,
-          message.y0,
-          message.x1,
-          message.y1,
-          valid(message.s, 0, 1) ? message.s : 1,
-          slot,
-        );
+        return;
       }
-    } else if (message.t === "full") {
-      // The named room is full. Wait quietly and try again.
-      retryAt = Date.now() + 15000;
-    } else if (message.t === "busy") {
-      retryAt = Date.now() + 30000;
-    }
-  };
 
-  const schedule = () => {
-    if (document.hidden || timer) {
-      return;
-    }
+      try {
+        socket = new WebSocket(url);
+      } catch {
+        socket = null;
+        schedule();
+        return;
+      }
 
-    const wait = Math.max(0, retryAt - Date.now());
-    retryAt = 0;
-    const backoff = wait
-      ? wait
-      : Math.min(15000, 1000 * Math.pow(2, Math.min(retry, 4)));
-    if (!wait) {
-      retry += 1;
-    }
+      socket.addEventListener("open", () => {
+        retry = 0;
+        socket.send(JSON.stringify({ t: "join", room: requestedRoom }));
+      });
 
-    timer = window.setTimeout(() => {
-      timer = 0;
+      socket.addEventListener("message", onMessage);
+
+      socket.addEventListener("close", () => {
+        socket = null;
+        // Alone again: back to the first colour until the next room.
+        interaction.state.slot = 0;
+        schedule();
+      });
+
+      socket.addEventListener("error", () => {
+        // A close event follows; reconnection is handled there.
+      });
+    };
+
+    const unsubscribe = interaction.onLocalGesture((gesture) => {
+      if (socket && socket.readyState === WebSocket.OPEN) {
+        socket.send(JSON.stringify(gesture));
+      }
+    });
+
+    const onOnline = () => {
+      retryAt = 0;
+      if (timer) {
+        window.clearTimeout(timer);
+        timer = 0;
+      }
       connect();
-    }, backoff);
-  };
+    };
+    window.addEventListener("online", onOnline);
 
-  const connect = () => {
-    if (document.hidden) {
-      return;
-    }
-    if (
-      socket &&
-      (socket.readyState === WebSocket.OPEN ||
-        socket.readyState === WebSocket.CONNECTING)
-    ) {
-      return;
-    }
+    // A hidden page keeps its socket but does not chase a lost one.
+    const pause = () => {
+      paused = true;
+    };
 
-    try {
-      socket = new WebSocket(url);
-    } catch {
-      socket = null;
-      schedule();
-      return;
-    }
+    const resume = () => {
+      paused = false;
+      if (!socket || socket.readyState === WebSocket.CLOSED) {
+        connect();
+      }
+    };
 
-    socket.addEventListener("open", () => {
-      retry = 0;
-      socket.send(JSON.stringify({ t: "join", room: requestedRoom }));
-    });
-
-    socket.addEventListener("message", onMessage);
-
-    socket.addEventListener("close", () => {
-      socket = null;
-      // Alone again: back to the first colour until the next room.
-      interaction.state.slot = 0;
-      schedule();
-    });
-
-    socket.addEventListener("error", () => {
-      // A close event follows; reconnection is handled there.
-    });
-  };
-
-  interaction.onLocalGesture((gesture) => {
-    if (socket && socket.readyState === WebSocket.OPEN) {
-      socket.send(JSON.stringify(gesture));
-    }
-  });
-
-  window.addEventListener("online", () => {
-    retryAt = 0;
-    if (timer) {
+    const close = () => {
+      closed = true;
+      unsubscribe();
+      window.removeEventListener("online", onOnline);
       window.clearTimeout(timer);
       timer = 0;
-    }
+      socket?.close();
+      socket = null;
+      interaction.state.slot = 0;
+    };
+
     connect();
-  });
 
-  document.addEventListener("visibilitychange", () => {
-    if (document.hidden) {
-      return;
-    }
-    if (!socket || socket.readyState === WebSocket.CLOSED) {
-      connect();
-    }
-  });
-
-  connect();
+    return { pause, resume, close };
+  };
 })();
