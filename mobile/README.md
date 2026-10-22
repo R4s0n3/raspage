@@ -113,11 +113,11 @@ at `https://the-rascal.de`). What needs your accounts:
    `de.therascal.moodpage` (register it when asked), name `moodpage`.
 3. On Coolify, set `APPLE_TEAM_ID=<Team ID>` and redeploy; check that
    `https://the-rascal.de/.well-known/apple-app-site-association` shows it.
-   Set `MOODPAGE_CONTACT` too, for the privacy page.
+   Set `MOODPAGE_OPERATOR`, `MOODPAGE_ADDRESS` and `MOODPAGE_CONTACT` too,
+   for the privacy page.
 4. From `mobile/`:
    ```bash
    npx eas-cli@latest login            # your Expo account
-   npx eas-cli@latest init             # links this app to an EAS project
    npx eas-cli@latest build -p ios --profile production
    npx eas-cli@latest submit -p ios --latest
    ```
